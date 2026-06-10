@@ -570,17 +570,17 @@ export function buildMovement(M) {
   // === Crown & stem =========================================================
   {
     const stem = cyl(0.5, 0.5, 3.4, M.steel);
-    stem.rotation.set(0, Math.PI / 2, 0);
+    stem.rotation.set(0, 0, Math.PI / 2);
     stem.position.set(L.plateR + 0.8, 0, 1.2);
     root.add(stem);
     const crown = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 1.7, 24), M.gold);
     crown.rotation.z = Math.PI / 2;
-    crown.position.set(L.plateR + 3.3, 0, 1.2);
+    crown.position.set(L.plateR + 2.9, 0, 1.2);
     root.add(crown);
     for (let i = 0; i < 16; i++) {
       const a = (i / 16) * TAU;
       const flute = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.35, 0.35), M.gold);
-      flute.position.set(L.plateR + 3.3, 2.2 * Math.cos(a), 1.2 + 2.2 * Math.sin(a));
+      flute.position.set(L.plateR + 2.9, 2.2 * Math.cos(a), 1.2 + 2.2 * Math.sin(a));
       flute.rotation.x = -a;
       root.add(flute);
     }
