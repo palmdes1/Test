@@ -1,0 +1,23 @@
+{
+  "name": "test",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test/kinematics.test.mjs",
+    "serve": "node tools/server.js",
+    "capture": "node tools/capture.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://local_proxy@127.0.0.1:36883/git/palmdes1/Test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "puppeteer": "^25.1.0",
+    "three": "^0.184.0"
+  },
+  "type": "module"
+}
