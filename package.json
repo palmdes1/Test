@@ -1,0 +1,11 @@
+{
+  "name": "rc-racing-sim",
+  "version": "0.1.0",
+  "description": "Physics-realistic 1/10 electric touring car (sedan) RC racing simulator",
+  "type": "module",
+  "scripts": {
+    "validate": "node tools/validate.mjs",
+    "lap": "node tools/run_lap.mjs",
+    "serve": "python3 -m http.server 8000"
+  }
+}

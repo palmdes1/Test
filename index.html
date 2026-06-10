@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RC Racing Sim — 1/10 EP Touring Car</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #1a1d24; }
+  canvas { display: block; }
+  #help {
+    position: fixed; bottom: 10px; right: 16px; color: #cfd6e2;
+    font: 13px/1.5 sans-serif; background: rgba(10,12,18,.8);
+    padding: 10px 14px; border-radius: 6px;
+  }
+  #help b { color: #fff; }
+  #trackname {
+    position: fixed; top: 170px; right: 16px; color: #cfd6e2;
+    font: bold 14px sans-serif;
+  }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="trackname">OVAL</div>
+<div id="help">
+  <b>&uarr;</b> throttle &nbsp; <b>&darr;</b>/<b>space</b> brake &nbsp; <b>&larr;&rarr;</b> steer<br>
+  <b>A</b> AI drive &nbsp; <b>C</b> camera &nbsp; <b>R</b> reset &nbsp; <b>1</b> oval &nbsp; <b>2</b> figure-8
+</div>
+<script type="module" src="web/main.js"></script>
+</body>
+</html>
