@@ -55,7 +55,8 @@ export const TC_PARAMS = {
     coolV: 0.0009        // extra cooling per m/s
   },
 
-  // --- Steering ---
+  // --- Steering / alignment ---
+  toeRear: 0.052,        // rad (~3 deg rear toe-in, stock TC setup)
   maxSteer: 0.49,        // rad (~28 deg at the wheel)
   steerRate: 9.0,        // rad/s slew at the wheel (low-profile servo, ~0.06 s/60deg)
   ackermann: 1.0,        // 1 = full geometric Ackermann

@@ -78,18 +78,33 @@ function shade(color, pts) {
   return `rgb(${color.map(c => Math.min(255, c * b) | 0).join(',')})`;
 }
 
-// Lofted 1:10 TC shell: cross-sections (x, half width, roof height).
+// Lofted 1:10 TC shell (Mi10 style): cross-sections (x, half width, roof height).
 const SHELL_SECTIONS = [
-  [0.215, 0.052, 0.030], [0.185, 0.080, 0.040], [0.130, 0.091, 0.050],
-  [0.060, 0.094, 0.058], [0.010, 0.093, 0.090], [-0.060, 0.091, 0.097],
-  [-0.115, 0.089, 0.088], [-0.165, 0.090, 0.064], [-0.215, 0.082, 0.056]
+  [0.215, 0.046, 0.024], [0.205, 0.066, 0.032], [0.185, 0.080, 0.040],
+  [0.155, 0.0885, 0.047], [0.115, 0.0925, 0.053], [0.070, 0.0945, 0.059],
+  [0.040, 0.094, 0.064], [0.005, 0.0925, 0.086], [-0.030, 0.0915, 0.0975],
+  [-0.075, 0.0905, 0.0985], [-0.110, 0.0895, 0.0915], [-0.145, 0.089, 0.080],
+  [-0.180, 0.089, 0.066], [-0.215, 0.0825, 0.058]
 ];
-const BODY_PINK = [228, 64, 152], GLASS = [38, 52, 72], Z_LOW = 0.014;
+const LIV_BLUE = [40, 92, 198], LIV_BLUE_DK = [30, 70, 160];
+const LIV_ORANGE = [242, 122, 28], LIV_WHITE = [242, 244, 246];
+const GLASS = [28, 34, 48], Z_LOW = 0.013;
 
 function shellRing([x, w, roof]) {
-  const belt = Math.min(0.054, roof - 0.004);
-  return [[x, -w, Z_LOW], [x, -w * 0.92, belt], [x, -w * 0.55, roof],
-          [x, w * 0.55, roof], [x, w * 0.92, belt], [x, w, Z_LOW]];
+  const belt = Math.min(0.052, roof - 0.006);
+  return [[x, -w, Z_LOW], [x, -w * 0.99, 0.032], [x, -w * 0.88, belt],
+          [x, -w * 0.50, roof], [x, w * 0.50, roof], [x, w * 0.88, belt],
+          [x, w * 0.99, 0.032], [x, w, Z_LOW]];
+}
+
+function livery(ax, k) {
+  const upper = k === 2 || k === 4, top = k === 3;
+  if (upper && ax > -0.145 && ax < 0.048) return GLASS;
+  if (top && ((ax > 0 && ax < 0.048) || (ax > -0.145 && ax < -0.092))) return GLASS;
+  if (ax > 0.150) return LIV_WHITE;
+  if (ax > 0.048) return (top || upper) ? LIV_ORANGE : LIV_WHITE;
+  if (k === 0 || k === 6) return LIV_BLUE_DK;
+  return LIV_BLUE;
 }
 
 let SHELL_CACHE = null;
@@ -99,24 +114,22 @@ function shellFaces() {
   const rings = SHELL_SECTIONS.map(shellRing);
   for (let i = 0; i < rings.length - 1; i++) {
     const a = rings[i], b = rings[i + 1];
-    for (let k = 0; k < 5; k++) {
+    for (let k = 0; k < 7; k++) {
       const quad = [a[k], a[k + 1], b[k + 1], b[k]];
       const ax = (a[k][0] + b[k][0]) / 2;
-      const az = quad.reduce((s, pt) => s + pt[2], 0) / 4;
-      const glass = az > 0.062 && ax > -0.15 && ax < 0.05 && !(ax > -0.055 && ax < 0);
-      faces.push({ pts: quad, color: glass ? GLASS : BODY_PINK });
+      faces.push({ pts: quad, color: livery(ax, k) });
     }
   }
-  faces.push({ pts: rings[0], color: BODY_PINK });
-  faces.push({ pts: rings[rings.length - 1].slice().reverse(), color: BODY_PINK });
-  const wz0 = 0.092, wz1 = 0.099;
-  faces.push({ pts: [[-0.225, -0.086, wz1], [-0.185, -0.086, wz1], [-0.185, 0.086, wz1], [-0.225, 0.086, wz1]], color: [245, 245, 245] });
-  faces.push({ pts: [[-0.225, -0.086, wz0], [-0.185, -0.086, wz0], [-0.185, 0.086, wz0], [-0.225, 0.086, wz0]], color: [200, 200, 205] });
+  faces.push({ pts: rings[0], color: LIV_WHITE });
+  faces.push({ pts: rings[rings.length - 1].slice().reverse(), color: LIV_BLUE });
+  const wz0 = 0.096, wz1 = 0.103, wing = [216, 224, 232];
+  faces.push({ pts: [[-0.228, -0.088, wz1], [-0.190, -0.088, wz1], [-0.190, 0.088, wz1], [-0.228, 0.088, wz1]], color: wing });
+  faces.push({ pts: [[-0.228, -0.088, wz0], [-0.190, -0.088, wz0], [-0.190, 0.088, wz0], [-0.228, 0.088, wz0]], color: [190, 198, 208] });
   for (const sgn of [-1, 1]) {
     faces.push({
-      pts: [[-0.23, sgn * 0.086, wz0 - 0.012], [-0.18, sgn * 0.086, wz0 - 0.012],
-            [-0.18, sgn * 0.086, wz1 + 0.004], [-0.23, sgn * 0.086, wz1 + 0.004]],
-      color: BODY_PINK
+      pts: [[-0.234, sgn * 0.088, wz0 - 0.014], [-0.184, sgn * 0.088, wz0 - 0.014],
+            [-0.184, sgn * 0.088, wz1 + 0.003], [-0.234, sgn * 0.088, wz1 + 0.003]],
+      color: wing
     });
   }
   SHELL_CACHE = faces;

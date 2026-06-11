@@ -170,7 +170,7 @@ export class Driver {
     const Tm = (car.tireT[0] + car.tireT[1] + car.tireT[2] + car.tireT[3]) / 4;
     const dTt = Tm - tp.Topt;
     const tempF = Math.max(0.72, 1 - tp.tempSens * dTt * dTt);
-    const gScale = Math.sqrt(tempF) * 0.995;
+    const gScale = Math.sqrt(tempF);
     const ahead = wrap(i0 + Math.max(2, Math.round(v * 0.08 / 0.15)), n);
     const vT = Math.min(this.vProfile[ahead] * gScale, this.speedOpts.vTop ?? 18.5);
     const e = vT - v;

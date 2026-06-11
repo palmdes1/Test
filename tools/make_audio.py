@@ -19,15 +19,27 @@ import imageio_ffmpeg
 FS = 44100
 
 
+def lowpass(x, a):
+    """One-pole lowpass, vectorized via scipy-free recursion in chunks."""
+    y = np.empty_like(x)
+    acc = 0.0
+    for i in range(len(x)):
+        acc += a * (x[i] - acc)
+        y[i] = acc
+    return y
+
+
 def synth(telemetry_path, max_laps=None):
+    """Belt-drive RC car heard from the driver's stand: smooth motor/spur
+    whine with Doppler, belt whirr, slip-gated tire scrub, distance + pan."""
     data = json.load(open(telemetry_path))
     frames = data["frames"]
     if max_laps is not None:
         frames = [f for f in frames if f["lap"] <= max_laps]
     fps = data["fps"]
+    stand = data["track"]["stand"]
     n_fr = len(frames)
-    dur = n_fr / fps
-    n = int(dur * FS)
+    n = int(n_fr / fps * FS)
     tf = np.arange(n_fr) / fps
     ta = np.arange(n) / FS
 
@@ -36,49 +48,54 @@ def synth(telemetry_path, max_laps=None):
     brk = np.interp(ta, tf, [f["brk"] for f in frames])
     slip = np.interp(ta, tf, [f.get("slip", 0) for f in frames])
     v = np.interp(ta, tf, [f["v"] for f in frames])
+    xs = np.array([f["x"] for f in frames])
+    ys = np.array([f["y"] for f in frames])
+    dist_f = np.sqrt((xs - stand["x"]) ** 2 + (ys - stand["y"]) ** 2 + stand["z"] ** 2)
+    vrad_f = np.gradient(dist_f) * fps
+    dist = np.interp(ta, tf, dist_f)
+    vrad = np.interp(ta, tf, vrad_f)
+    pan = np.clip(np.interp(ta, tf, (xs - stand["x"])) / 14.0, -1, 1)
 
     rng = np.random.default_rng(3)
+    spin = np.clip(rpm / 5000.0, 0, 1)
+    doppler = 1.0 / (1.0 + vrad / 343.0)
 
-    # --- motor whine: pitch ~ rpm, slight PWM shimmer ---
-    f0 = rpm / 60.0 * 3.0  # "3rd order" whine, sweeps ~0-2.3 kHz
-    phase = 2 * np.pi * np.cumsum(f0) / FS
-    shimmer = 1 + 0.004 * np.sin(2 * np.pi * 37 * ta)
-    motor = (0.55 * np.sin(phase * shimmer)
-             + 0.30 * np.sin(2 * phase)
-             + 0.18 * np.sin(3 * phase)
-             + 0.10 * np.sin(6 * phase))
-    motor = np.tanh(2.0 * motor)
-    spin = np.clip(rpm / 4000.0, 0, 1)
-    motor_amp = (0.10 + 0.50 * thr + 0.30 * brk) * spin
-    motor *= motor_amp * 0.55
+    # --- motor / spur whine: smooth harmonic stack, two detuned voices ---
+    f0 = rpm / 60.0 * 2.2 * doppler
+    vib = 1 + 0.0025 * np.sin(2 * np.pi * 6.5 * ta)
+    ph1 = 2 * np.pi * np.cumsum(f0 * vib) / FS
+    ph2 = 2 * np.pi * np.cumsum(f0 * 1.004) / FS
+    def voice(ph):
+        return (np.sin(ph) + 0.50 * np.sin(2 * ph) + 0.26 * np.sin(3 * ph)
+                + 0.12 * np.sin(4 * ph))
+    motor = 0.6 * voice(ph1) + 0.4 * voice(ph2)
+    motor = np.tanh(1.15 * motor) * 0.55
+    motor *= (0.07 + 0.40 * thr + 0.20 * brk) * spin
 
-    # --- tire scrub: low-passed noise gated by slip saturation ---
-    noise = rng.standard_normal(n).astype(np.float32)
-    scrub = np.empty_like(noise)
-    a = 0.18  # one-pole lowpass ~1.4 kHz
-    acc = 0.0
-    for i in range(n):  # simple IIR (vectorize via lfilter-free loop is slow; chunk)
-        acc += a * (noise[i] - acc)
-        scrub[i] = acc
-    env = np.clip((slip - 0.85) / 0.7, 0, 1) ** 1.4 * np.clip(v / 6.0, 0, 1)
-    scrub *= env * 0.9
+    # --- belt whirr: noise amplitude-modulated at belt frequency ---
+    fbelt = rpm / 60.0 * 0.5 * doppler
+    phb = 2 * np.pi * np.cumsum(np.maximum(fbelt, 1)) / FS
+    whirr = lowpass(rng.standard_normal(n).astype(np.float32), 0.30)
+    whirr *= (0.55 + 0.45 * np.sin(phb)) * spin * (0.25 + 0.5 * thr) * 0.30
 
-    # --- wind / rolling ---
-    wind_n = rng.standard_normal(n).astype(np.float32)
-    wnd = np.empty_like(wind_n)
-    acc = 0.0
-    for i in range(n):
-        acc += 0.05 * (wind_n[i] - acc)
-        wnd[i] = acc
-    wnd *= 0.5 * (v / 30.0) ** 2
+    # --- tire scrub: soft "shhh" only at true slip saturation ---
+    scrub = lowpass(rng.standard_normal(n).astype(np.float32), 0.10)
+    env = np.clip((slip - 0.95) / 0.55, 0, 1) ** 1.6 * np.clip(v / 6.0, 0, 1)
+    scrub *= env * 0.55
 
-    mix = motor + scrub + wnd
-    mix = np.tanh(1.4 * mix)
-    mix *= 0.8 / max(1e-6, np.abs(mix).max())
+    # --- wind + faint outdoor ambience ---
+    wnd = lowpass(rng.standard_normal(n).astype(np.float32), 0.04)
+    wnd = wnd * (0.30 * (v / 30.0) ** 2) + wnd * 0.012
 
-    # gentle stereo: slight high-frequency decorrelation
-    left = mix
-    right = np.roll(mix, 13)
+    # distance attenuation from the stand
+    gdist = np.clip(5.5 / dist, 0.18, 1.0)
+    mix = (motor + whirr + scrub) * gdist + wnd
+    mix = np.tanh(1.1 * mix)
+    mix = lowpass(mix.astype(np.float32), 0.55)  # take the edge off the top end
+    mix *= 0.65 / max(1e-6, np.abs(mix).max())
+
+    left = mix * np.sqrt(0.5 * (1 - 0.8 * pan))
+    right = mix * np.sqrt(0.5 * (1 + 0.8 * pan))
     pcm = np.stack([left, right], axis=1)
     return (pcm * 32767).astype(np.int16)
 

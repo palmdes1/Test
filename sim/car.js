@@ -74,7 +74,8 @@ export class Car {
       dFL = Math.atan(L / (R - t2 * ack));
       dFR = Math.atan(L / (R + t2 * ack));
     }
-    const steerAng = [dFL, dFR, 0, 0];
+    // rear toe-in: wheels point inward for stability (left toes right, etc.)
+    const steerAng = [dFL, dFR, -(p.toeRear || 0), p.toeRear || 0];
 
     // --- Wheel positions in body frame ---
     const wx = [p.a, p.a, -p.b, -p.b];

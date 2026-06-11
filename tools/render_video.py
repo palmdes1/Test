@@ -152,10 +152,10 @@ class GroundTexture:
         gd = ImageDraw.Draw(groove)
         rl = data["racingLine"]
         gpts = [px(p) for p in rl] + [px(rl[0])]
-        gd.line(gpts, fill=120, width=int(0.6 * ppm))
-        gd.line(gpts, fill=70, width=int(1.0 * ppm))
-        groove = groove.filter(ImageFilter.GaussianBlur(ppm * 0.18))
-        dark = Image.new("RGB", self.size, (38, 38, 42))
+        gd.line(gpts, fill=175, width=int(0.55 * ppm))
+        gd.line(gpts, fill=105, width=int(1.05 * ppm))
+        groove = groove.filter(ImageFilter.GaussianBlur(ppm * 0.12))
+        dark = Image.new("RGB", self.size, (33, 33, 37))
         img = Image.composite(dark, img, groove)
         draw = ImageDraw.Draw(img)
 
@@ -329,7 +329,7 @@ def build_car_polys(cardef, fr):
             for cx_, cz in ring:
                 lx, ly, lz = cx_, side * 0.013, cz + rw
                 pts.append((wx + lx * cs - ly * sn, wy_ + lx * sn + ly * cs, lz))
-            polys.append((tr(pts), (25, 26, 30)))
+            polys.append((tr(pts), (226, 228, 232)))
         for i in range(6):
             c0, c1 = ring[i], ring[(i + 1) % 6]
             quad = []
@@ -340,27 +340,47 @@ def build_car_polys(cardef, fr):
     return polys
 
 
-# Lofted 1:10 touring car shell: cross-sections (x, half width, roof height).
+# Lofted 1:10 touring car shell (Schumacher Mi10 style): finer cross-sections
+# (x, half width, roof height) with 8-point rings for rounded flanks.
 SHELL_SECTIONS = [
-    (0.215, 0.052, 0.030),   # nose tip
-    (0.185, 0.080, 0.040),
-    (0.130, 0.091, 0.050),   # hood
-    (0.060, 0.094, 0.058),   # windshield base
-    (0.010, 0.093, 0.090),   # windshield top
-    (-0.060, 0.091, 0.097),  # roof
-    (-0.115, 0.089, 0.088),  # rear window
-    (-0.165, 0.090, 0.064),  # rear deck
-    (-0.215, 0.082, 0.056),  # tail
+    (0.215, 0.046, 0.024), (0.205, 0.066, 0.032), (0.185, 0.080, 0.040),
+    (0.155, 0.0885, 0.047), (0.115, 0.0925, 0.053), (0.070, 0.0945, 0.059),
+    (0.040, 0.094, 0.064), (0.005, 0.0925, 0.086), (-0.030, 0.0915, 0.0975),
+    (-0.075, 0.0905, 0.0985), (-0.110, 0.0895, 0.0915), (-0.145, 0.089, 0.080),
+    (-0.180, 0.089, 0.066), (-0.215, 0.0825, 0.058),
 ]
-BODY_PINK = (228, 64, 152)
-GLASS = (38, 52, 72)
-Z_LOW = 0.014
+LIV_BLUE = (40, 92, 198)
+LIV_BLUE_DK = (30, 70, 160)
+LIV_ORANGE = (242, 122, 28)
+LIV_WHITE = (242, 244, 246)
+GLASS = (28, 34, 48)
+BODY_PINK = LIV_ORANGE  # hood color alias for the in-car view
+Z_LOW = 0.013
 
 
 def _shell_ring(x, w, roof):
-    belt = min(0.054, roof - 0.004)
-    return [(x, -w, Z_LOW), (x, -w * 0.92, belt), (x, -w * 0.55, roof),
-            (x, w * 0.55, roof), (x, w * 0.92, belt), (x, w, Z_LOW)]
+    belt = min(0.052, roof - 0.006)
+    return [(x, -w, Z_LOW), (x, -w * 0.99, 0.032), (x, -w * 0.88, belt),
+            (x, -w * 0.50, roof), (x, w * 0.50, roof), (x, w * 0.88, belt),
+            (x, w * 0.99, 0.032), (x, w, Z_LOW)]
+
+
+def _livery(ax, az, k):
+    """Face color from longitudinal position ax, height az and ring span k
+    (0/6 rocker, 1/5 lower side, 2/4 upper side, 3 top)."""
+    upper = k in (2, 4)
+    top = k == 3
+    if upper and -0.145 < ax < 0.048:
+        return GLASS                        # side windows
+    if top and (0.0 < ax < 0.048 or -0.145 < ax < -0.092):
+        return GLASS                        # windshield / rear window
+    if ax > 0.150:
+        return LIV_WHITE                    # bumper / nose
+    if 0.048 < ax <= 0.150:
+        return LIV_ORANGE if (top or upper) else LIV_WHITE  # hood flames
+    if k in (0, 6):
+        return LIV_BLUE_DK                  # rockers
+    return LIV_BLUE
 
 
 def shell_faces():
@@ -368,25 +388,24 @@ def shell_faces():
     faces = []
     rings = [_shell_ring(*s) for s in SHELL_SECTIONS]
     for a, b in zip(rings, rings[1:]):
-        for k in range(5):
+        for k in range(7):
             quad = [a[k], a[k + 1], b[k + 1], b[k]]
             ax = sum(p[0] for p in quad) / 4
             az = sum(p[2] for p in quad) / 4
-            glass = az > 0.062 and -0.15 < ax < 0.05 and not (-0.055 < ax < 0.0)
-            faces.append((quad, GLASS if glass else BODY_PINK))
-    # nose / tail caps
-    faces.append((rings[0], BODY_PINK))
-    faces.append((rings[-1][::-1], BODY_PINK))
-    # rear wing: plate + endplates
-    wz0, wz1 = 0.092, 0.099
-    faces.append(([(-0.225, -0.086, wz1), (-0.185, -0.086, wz1),
-                   (-0.185, 0.086, wz1), (-0.225, 0.086, wz1)], (245, 245, 245)))
-    faces.append(([(-0.225, -0.086, wz0), (-0.185, -0.086, wz0),
-                   (-0.185, 0.086, wz0), (-0.225, 0.086, wz0)], (200, 200, 205)))
+            faces.append((quad, _livery(ax, az, k)))
+    faces.append((rings[0], LIV_WHITE))
+    faces.append((rings[-1][::-1], LIV_BLUE))
+    # rear wing: clear polycarbonate look, plate + endplates
+    wz0, wz1 = 0.096, 0.103
+    wing = (216, 224, 232)
+    faces.append(([(-0.228, -0.088, wz1), (-0.190, -0.088, wz1),
+                   (-0.190, 0.088, wz1), (-0.228, 0.088, wz1)], wing))
+    faces.append(([(-0.228, -0.088, wz0), (-0.190, -0.088, wz0),
+                   (-0.190, 0.088, wz0), (-0.228, 0.088, wz0)], (190, 198, 208)))
     for sgn in (-1, 1):
-        faces.append(([(-0.23, sgn * 0.086, wz0 - 0.012), (-0.18, sgn * 0.086, wz0 - 0.012),
-                       (-0.18, sgn * 0.086, wz1 + 0.004), (-0.23, sgn * 0.086, wz1 + 0.004)],
-                      BODY_PINK))
+        faces.append(([(-0.234, sgn * 0.088, wz0 - 0.014), (-0.184, sgn * 0.088, wz0 - 0.014),
+                       (-0.184, sgn * 0.088, wz1 + 0.003), (-0.234, sgn * 0.088, wz1 + 0.003)],
+                      wing))
     return faces
 
 
@@ -414,7 +433,7 @@ def build_hood_polys(cardef, fr):
             polys.append((tr([c[i] for i in fc]), color))
 
     box(0.07, hl, -hw * 0.88, hw * 0.88, 0.012, 0.048, BODY_PINK)            # hood
-    box(hl - 0.03, hl, -hw * 0.88, hw * 0.88, 0.048, 0.054, (188, 44, 122))  # nose lip
+    box(hl - 0.03, hl, -hw * 0.88, hw * 0.88, 0.048, 0.054, (228, 230, 234))  # nose lip
     for wy_ in (tw, -tw):  # front wheels (steered)
         cs, sn = math.cos(steer), math.sin(steer)
         ring = [(rw * math.cos(math.pi / 3 * i), rw * math.sin(math.pi / 3 * i)) for i in range(6)]
@@ -423,7 +442,7 @@ def build_hood_polys(cardef, fr):
             for cx_, cz in ring:
                 lx, ly, lz = cx_, side * 0.013, cz + rw
                 pts.append((a + lx * cs - ly * sn, wy_ + lx * sn + ly * cs, lz))
-            polys.append((tr(pts), (25, 26, 30)))
+            polys.append((tr(pts), (226, 228, 232)))
     return polys
 
 
@@ -509,7 +528,23 @@ def make_sky(w, h):
         c = tuple(int(SKY_TOP[i] + (SKY_BOT[i] - SKY_TOP[i]) * t) for i in range(3))
         for x in range(w):
             pxl[x, y] = c
-    return img
+    # soft cumulus clouds
+    rng = np.random.default_rng(5)
+    overlay = Image.new("L", (w, h), 0)
+    od = ImageDraw.Draw(overlay)
+    for _ in range(10):
+        cx = rng.uniform(0, w)
+        cy = rng.uniform(0.08, 0.55) * h
+        rw_ = rng.uniform(0.06, 0.16) * w
+        rh_ = rw_ * rng.uniform(0.22, 0.38)
+        for k in range(4):
+            ox = rng.uniform(-rw_ * 0.5, rw_ * 0.5)
+            oy = rng.uniform(-rh_ * 0.3, rh_ * 0.3)
+            od.ellipse([cx + ox - rw_ / 2, cy + oy - rh_ / 2,
+                        cx + ox + rw_ / 2, cy + oy + rh_ / 2], fill=110)
+    overlay = overlay.filter(ImageFilter.GaussianBlur(h * 0.035))
+    white = Image.new("RGB", (w, h), (250, 252, 254))
+    return Image.composite(white, img, overlay)
 
 
 # ---------------------------------------------------------------------------
@@ -554,8 +589,8 @@ def render(telemetry_path, out_path, max_laps=None):
     lap_times = data["lapTimes"]
     hist = []
     HIST_N = 240  # 4 s of strip-chart history
-    RW, RH = W * 3 // 2, H * 3 // 2          # 1.5x supersampling
-    PW, PH = PIP_W * 3 // 2, PIP_H * 3 // 2
+    RW, RH = W * 2, H * 2                    # 2x supersampling
+    PW, PH = PIP_W * 2, PIP_H * 2
     for fi, fr in enumerate(frames):
         cam.update((fr["x"], fr["y"]), 1.0 / fps_in)
         B = cam.basis(RW, RH)

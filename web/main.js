@@ -46,10 +46,10 @@ function setTrack(name) {
   params = motorClass === 'mod' ? TC_PARAMS_MOD : TC_PARAMS;
   car = new Car(params);
   const opts = motorClass === 'mod'
-    ? { speed: { ayMax: 22, axBrake: 17, axAccel: 15, vTop: 32 }, kp: 1.1,
-        line: { margin: 0.26, iterations: 2000 } }
-    : { speed: { ayMax: 21, axBrake: 15, axAccel: 12, vTop: 19 }, kp: 1.1,
-        line: { margin: 0.26, iterations: 2000 } };
+    ? { speed: { ayMax: 22.8, axBrake: 17.5, axAccel: 15.5, vTop: 32 }, kp: 1.2,
+        line: { margin: 0.24, iterations: 2000 } }
+    : { speed: { ayMax: 21, axBrake: 15, axAccel: 12, vTop: 19 }, kp: 1.2,
+        line: { margin: 0.24, iterations: 2000 } };
   world = new World(track, car);
   driver = new Driver(track, car, opts);
   car.surfaceFn = makeSurface(track, driver.line);

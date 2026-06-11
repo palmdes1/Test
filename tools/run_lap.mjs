@@ -18,10 +18,10 @@ const outFile = process.argv[4] || `out/${trackName}_telemetry.json`;
 
 const PARAMS = motorClass === 'mod' ? TC_PARAMS_MOD : TC_PARAMS;
 const driverOpts = motorClass === 'mod'
-  ? { speed: { ayMax: 22, axBrake: 17, axAccel: 15, vTop: 32 }, kp: 1.1,
-      line: { margin: 0.26, iterations: 2000 } }
-  : { speed: { ayMax: 21, axBrake: 15, axAccel: 12, vTop: 19 }, kp: 1.1,
-      line: { margin: 0.26, iterations: 2000 } };
+  ? { speed: { ayMax: 22.8, axBrake: 17.5, axAccel: 15.5, vTop: 32 }, kp: 1.2,
+      line: { margin: 0.24, iterations: 2000 } }
+  : { speed: { ayMax: 21, axBrake: 15, axAccel: 12, vTop: 19 }, kp: 1.2,
+      line: { margin: 0.24, iterations: 2000 } };
 
 const track = buildTrack(trackName);
 const car = new Car(PARAMS);

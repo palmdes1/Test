@@ -29,11 +29,11 @@ function valueNoise(x, y, seed) {
  * height is the local road elevation in metres.
  */
 export function makeSurface(track, line, opts = {}) {
-  const gripNoiseAmp = opts.gripNoiseAmp ?? 0.045;  // +-4.5% patchy asphalt
-  const grooveBonus = opts.grooveBonus ?? 0.05;     // rubbered-in line
-  const dustPenalty = opts.dustPenalty ?? 0.07;     // offline dust/marbles
-  const roughFine = opts.roughFine ?? 0.0009;       // m, ~0.7 m wavelength
-  const roughCoarse = opts.roughCoarse ?? 0.0018;   // m, ~3 m undulation
+  const gripNoiseAmp = opts.gripNoiseAmp ?? 0.065;  // +-6.5% patchy asphalt
+  const grooveBonus = opts.grooveBonus ?? 0.055;    // rubbered-in line
+  const dustPenalty = opts.dustPenalty ?? 0.085;    // offline dust/marbles
+  const roughFine = opts.roughFine ?? 0.0013;       // m, ~0.7 m wavelength
+  const roughCoarse = opts.roughCoarse ?? 0.0026;   // m, ~3 m undulation
   const seed = opts.seed ?? 11;
 
   // grid of distance-to-racing-line over the track bbox (0.5 m cells)

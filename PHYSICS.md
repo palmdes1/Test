@@ -78,10 +78,13 @@ ESC proportional brake (shorted windings, current-limited) acting through
 the drivetrain on **all four wheels** — RC cars have no friction brakes.
 No drag brake (blinky coast is free).
 
-## Steering
+## Steering & alignment
 
 Servo slew-rate limit (~0.06 s/60°) and geometric **Ackermann** — inner
-wheel steers more, computed per wheel from the turn-center geometry.
+wheel steers more, computed per wheel from the turn-center geometry. The
+rear axle carries **3° toe-in** (standard TC setup): each rear wheel runs a
+constant slip offset that stabilizes corner exit at the cost of a little
+scrub, exactly the tradeoff real setups make.
 
 ## Tire temperatures
 
@@ -97,10 +100,10 @@ a real qualifying stint.
 
 Grip is a function of position, not a constant (`sim/surface.js`):
 
-- ±4.5 % patchy asphalt variation (deterministic value noise)
-- +5 % on the rubbered-in groove (Gaussian falloff around the racing line)
-- −7 % dust/marbles offline (beyond ~1 m from the groove)
-- road **roughness**: two-octave height noise (±1–2 mm at 0.7 m and 3 m
+- ±6.5 % patchy asphalt variation (deterministic value noise)
+- +5.5 % on the rubbered-in groove (Gaussian falloff around the racing line)
+- −8.5 % dust/marbles offline (beyond ~1 m from the groove)
+- road **roughness**: two-octave height noise (±1.3–2.6 mm at 0.7 m and 3 m
   wavelengths) fed into the suspension as per-wheel road displacement — this
   is what makes the shocks live on the straights and the car feel like it's
   on real asphalt rather than glass.
@@ -147,9 +150,11 @@ The braking/acceleration passes are **friction-circle coupled**: longitudinal
 capacity shrinks with cornering load, producing trail-braking entries and
 progressive exit throttle like a real driver.
 
-Result on the VRC-Luxembourg layout (5.5T): laps 16.65 → 16.17 → 16.17 →
-16.08 → **16.06 s** against an ideal of **15.82 s** — within 0.24 s of the
-model's theoretical optimum, with zero board contact.
+Result on the VRC-Luxembourg layout (5.5T, bumpy patchy surface): laps
+16.57 → 16.12 → 16.07 → **16.00 s** against a nominal-grip ideal of
+**15.56 s**. The residual gap is largely the surface itself: the ideal
+assumes uniform nominal grip while the real(istic) track varies ±6.5%
+patch to patch plus offline dust.
 
 ## Known simplifications (next steps)
 
