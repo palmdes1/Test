@@ -41,6 +41,16 @@ Mouse-orbit/zoom (OrbitControls), `v` cycles the nine camera presets
 `?t=<seconds since 12:00>` sets the time (defaults to your clock),
 `?view=<preset>` picks the start view.
 
+## Video render
+
+```sh
+node tools/video.js --out watch.mp4 --fps 30 --size 1080
+```
+
+Renders a 29 s choreographed showcase (overview orbit, escapement ticking
+close-up, balance & hairspring, pull-back over the hands) with the movement
+running in real time, then encodes it with ffmpeg.
+
 ## Headless captures
 
 ```sh
