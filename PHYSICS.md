@@ -143,9 +143,13 @@ runner and shown in the video HUD. Driving uses pure-pursuit steering,
 anticipatory braking (scanning ahead for required decel, like a real braking
 point), drag-feedforward throttle, and tire-temperature-scaled commitment.
 
-Result on the Luxembourg layout (5.5T): laps 17.79 → 17.19 → 17.02 → 16.95 →
-**16.94 s** against an ideal of **16.59 s** — within 0.35 s of the model's
-theoretical optimum, with zero board contact.
+The braking/acceleration passes are **friction-circle coupled**: longitudinal
+capacity shrinks with cornering load, producing trail-braking entries and
+progressive exit throttle like a real driver.
+
+Result on the VRC-Luxembourg layout (5.5T): laps 16.65 → 16.17 → 16.17 →
+16.08 → **16.06 s** against an ideal of **15.82 s** — within 0.24 s of the
+model's theoretical optimum, with zero board contact.
 
 ## Known simplifications (next steps)
 

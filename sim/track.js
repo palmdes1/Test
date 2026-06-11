@@ -138,30 +138,37 @@ function buildPath(segments, x0 = 0, y0 = 0, h0 = 0) {
 }
 
 export function buildLuxembourg() {
-  // Inspired by the Mini Circuit "Ville de Luxembourg" (LMCC) outdoor asphalt
-  // track as featured in VRC Pro: ~270 m, 4 m lanes, a long main straight,
-  // fast sweepers and a tight infield with hairpins and a chicane.
+  // Reconstruction of the VRC Pro "Luxembourg" 1:10 electric on-road track
+  // (from replay footage): divided main straight with a center rail, a big
+  // 180 carousel at the right end, a kerbed esses complex through the
+  // infield, two 180 loops around grass islands upper-left, a long return
+  // straight and a tight final hairpin onto the main straight. CCW.
   const pts = buildPath([
-    ['S', 50],            // main straight
-    ['L', 8, 180],        // T1: fast 180 sweeper
-    ['S', 30],            // top straight (heading back)
-    ['R', 5, 90],         // T2: fast right up into the infield
-    ['S', 8],
-    ['L', 3, 90],         // T3
-    ['S', 16],            // upper-left straight
-    ['L', 3, 90],         // T4
+    ['S', 40],            // main straight (start/finish)
+    ['L', 7, 180],        // T1: big carousel around the grass island
     ['S', 6],
-    ['L', 3.5, 90],       // T5
-    ['S', 10],
-    ['R', 3, 90],         // T6: right
+    ['R', 4, 90],         // T2: right into the esses
+    ['S', 4],
+    ['L', 3, 90],         // T3
+    ['S', 9],             // upper straight
+    ['L', 3, 90],         // T4
     ['S', 3],
-    ['L', 3, 90],         // T7: chicane exit
-    ['S', 20],            // middle straight
-    ['R', 2.5, 180],      // T8: right hairpin
-    ['S', 32.5],          // back straight
-    ['L', 2.75, 180]      // T9: slow 180 onto the main straight
+    ['R', 3, 90],         // T5: right
+    ['S', 4],
+    ['R', 3, 90],         // T6: right
+    ['S', 2],
+    ['L', 3.2, 180],      // T7: carousel around the upper-left island
+    ['S', 8.8],
+    ['L', 3.2, 90],       // T8: onto the return straight
+    ['S', 28],            // return straight
+    ['R', 2.5, 180],      // T9: right hairpin (double-back)
+    ['S', 29.8],          // lower return lane (beside the main straight)
+    ['L', 2.0, 180]       // T10: tight final hairpin onto the main straight
   ]);
-  return finalize('luxembourg', pts, 4.0, { x: 25, y: -7.5, z: 2.6 }, [10, 0]);
+  const t = finalize('luxembourg', pts, 3.6, { x: 20, y: -6.5, z: 2.6 }, [8, 0]);
+  // low red/white divider rail between the main straight and the return lane
+  t.extras = [{ kind: 'rail', from: [4.5, 2.0], to: [27.0, 2.0] }];
+  return t;
 }
 
 // ---------------------------------------------------------------------------
@@ -200,15 +207,41 @@ export function trackGeometry(track) {
       });
     }
   }
-  // boards (low side walls), alternating red/white
-  const bh = 0.12, boff = hw + 0.18;
+  // boards (low side walls), alternating sponsor-orange / white (VRC style)
+  const bh = 0.14, boff = hw + 0.22;
   for (const side of [1, -1]) {
     for (let i = 0; i < n; i += skip) {
       const i2 = i + skip;
       const a = edge(i, side * boff), b = edge(i2, side * boff);
-      const col = (Math.floor(i / skip) % 2 === 0) ? [210, 60, 50] : [235, 235, 235];
+      const col = (Math.floor(i / skip) % 2 === 0) ? [232, 122, 26] : [240, 240, 240];
       polys.push({
         pts: [[a[0], a[1], 0], [b[0], b[1], 0], [b[0], b[1], bh], [a[0], a[1], bh]],
+        color: col, kind: 'wall'
+      });
+    }
+  }
+  // extra decorations (e.g. divider rails between parallel lanes)
+  for (const ex of track.extras || []) {
+    if (ex.kind !== 'rail') continue;
+    const [x0, y0] = ex.from, [x1, y1] = ex.to;
+    const len = Math.hypot(x1 - x0, y1 - y0);
+    const ux = (x1 - x0) / len, uy = (y1 - y0) / len;
+    const nxr = -uy, nyr = ux, w2 = 0.05, rh = 0.10, seg = 0.8;
+    for (let s0 = 0; s0 < len; s0 += seg) {
+      const s1 = Math.min(s0 + seg, len);
+      const ax = x0 + ux * s0, ay = y0 + uy * s0;
+      const bx = x0 + ux * s1, by = y0 + uy * s1;
+      const col = (Math.round(s0 / seg) % 2 === 0) ? [212, 58, 48] : [238, 238, 238];
+      for (const sd of [1, -1]) {
+        polys.push({
+          pts: [[ax + nxr * w2 * sd, ay + nyr * w2 * sd, 0], [bx + nxr * w2 * sd, by + nyr * w2 * sd, 0],
+                [bx + nxr * w2 * sd, by + nyr * w2 * sd, rh], [ax + nxr * w2 * sd, ay + nyr * w2 * sd, rh]],
+          color: col, kind: 'wall'
+        });
+      }
+      polys.push({
+        pts: [[ax - nxr * w2, ay - nyr * w2, rh], [bx - nxr * w2, by - nyr * w2, rh],
+              [bx + nxr * w2, by + nyr * w2, rh], [ax + nxr * w2, ay + nyr * w2, rh]],
         color: col, kind: 'wall'
       });
     }

@@ -159,6 +159,33 @@ class GroundTexture:
         img = Image.composite(dark, img, groove)
         draw = ImageDraw.Draw(img)
 
+        # --- painted infield logo (sunburst disc) + asphalt sponsor text ---
+        big = center[:, 0].argmax()
+        # carousel island: offset inward from the rightmost centerline point
+        cxp = px((center[big][0] - 7.0, 7.0))
+        rpx = 2.0 * ppm
+        draw.ellipse([cxp[0] - rpx, cxp[1] - rpx, cxp[0] + rpx, cxp[1] + rpx],
+                     fill=(235, 235, 232))
+        rpx2 = 1.7 * ppm
+        draw.ellipse([cxp[0] - rpx2, cxp[1] - rpx2, cxp[0] + rpx2, cxp[1] + rpx2],
+                     fill=(220, 60, 50))
+        rpx3 = 1.25 * ppm
+        draw.ellipse([cxp[0] - rpx3, cxp[1] - rpx3, cxp[0] + rpx3, cxp[1] + rpx3],
+                     fill=(245, 205, 60))
+
+        def paint_text(pos, angle_deg, text, height_m=1.0, color=(225, 225, 222)):
+            fnt = load_font(int(height_m * ppm))
+            tw_, th_ = int(fnt.getlength(text)) + 8, int(height_m * ppm * 1.4)
+            tile = Image.new("RGBA", (tw_, th_), (0, 0, 0, 0))
+            ImageDraw.Draw(tile).text((4, 0), text, font=fnt, fill=color + (200,))
+            tile = tile.rotate(angle_deg, expand=True)
+            p = px(pos)
+            img.paste(tile, (int(p[0] - tile.width / 2), int(p[1] - tile.height / 2)), tile)
+
+        paint_text((20, 0.0), 0, "vrc-pro", 1.1)
+        paint_text((15, 9.0), 0, "rc racing", 0.9)
+        paint_text((22, 25.0), 0, "luxembourg", 0.9)
+
         # --- start/finish checker + line ---
         cells = 10
         for kcell in range(cells):
@@ -246,8 +273,8 @@ class StandCamera:
         kf = dt / (0.35 + dt)
         self.fov += kf * (fov_t - self.fov)
 
-    def basis(self):
-        return CameraBasis(self.eye, self.look, self.fov, W, H)
+    def basis(self, w=W, h=H):
+        return CameraBasis(self.eye, self.look, self.fov, w, h)
 
 
 def shade(color, p):
@@ -289,12 +316,9 @@ def build_car_polys(cardef, fr):
         for fc in [(0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7), (4, 5, 6, 7)]:
             polys.append((tr([c[i] for i in fc]), color))
 
-    shell = (235, 90, 30)
     tilt[0] = True
-    box(-hl, hl, -hw, hw, 0.012, 0.052, shell)
-    box(-hl * 0.55, hl * 0.45, -hw * 0.78, hw * 0.78, 0.052, 0.105, (40, 60, 85))
-    box(-hl * 0.5, hl * 0.4, -hw * 0.25, hw * 0.25, 0.105, 0.108, (250, 250, 250))
-    box(-hl - 0.005, -hl + 0.035, -hw * 0.85, hw * 0.85, 0.085, 0.095, shell)
+    for pts, col in shell_faces():
+        polys.append((tr(pts), col))
     tilt[0] = False
 
     for wx, wy_, st in ((a, tw, steer), (a, -tw, steer), (-a, tw, 0.0), (-a, -tw, 0.0)):
@@ -314,6 +338,56 @@ def build_car_polys(cardef, fr):
                 quad.append((wx + lx * cs - ly * sn, wy_ + lx * sn + ly * cs, lz))
             polys.append((tr(quad), (15, 15, 17)))
     return polys
+
+
+# Lofted 1:10 touring car shell: cross-sections (x, half width, roof height).
+SHELL_SECTIONS = [
+    (0.215, 0.052, 0.030),   # nose tip
+    (0.185, 0.080, 0.040),
+    (0.130, 0.091, 0.050),   # hood
+    (0.060, 0.094, 0.058),   # windshield base
+    (0.010, 0.093, 0.090),   # windshield top
+    (-0.060, 0.091, 0.097),  # roof
+    (-0.115, 0.089, 0.088),  # rear window
+    (-0.165, 0.090, 0.064),  # rear deck
+    (-0.215, 0.082, 0.056),  # tail
+]
+BODY_PINK = (228, 64, 152)
+GLASS = (38, 52, 72)
+Z_LOW = 0.014
+
+
+def _shell_ring(x, w, roof):
+    belt = min(0.054, roof - 0.004)
+    return [(x, -w, Z_LOW), (x, -w * 0.92, belt), (x, -w * 0.55, roof),
+            (x, w * 0.55, roof), (x, w * 0.92, belt), (x, w, Z_LOW)]
+
+
+def shell_faces():
+    """Local-frame shell polygons [(pts, color)] - lofted TC body + wing."""
+    faces = []
+    rings = [_shell_ring(*s) for s in SHELL_SECTIONS]
+    for a, b in zip(rings, rings[1:]):
+        for k in range(5):
+            quad = [a[k], a[k + 1], b[k + 1], b[k]]
+            ax = sum(p[0] for p in quad) / 4
+            az = sum(p[2] for p in quad) / 4
+            glass = az > 0.062 and -0.15 < ax < 0.05 and not (-0.055 < ax < 0.0)
+            faces.append((quad, GLASS if glass else BODY_PINK))
+    # nose / tail caps
+    faces.append((rings[0], BODY_PINK))
+    faces.append((rings[-1][::-1], BODY_PINK))
+    # rear wing: plate + endplates
+    wz0, wz1 = 0.092, 0.099
+    faces.append(([(-0.225, -0.086, wz1), (-0.185, -0.086, wz1),
+                   (-0.185, 0.086, wz1), (-0.225, 0.086, wz1)], (245, 245, 245)))
+    faces.append(([(-0.225, -0.086, wz0), (-0.185, -0.086, wz0),
+                   (-0.185, 0.086, wz0), (-0.225, 0.086, wz0)], (200, 200, 205)))
+    for sgn in (-1, 1):
+        faces.append(([(-0.23, sgn * 0.086, wz0 - 0.012), (-0.18, sgn * 0.086, wz0 - 0.012),
+                       (-0.18, sgn * 0.086, wz1 + 0.004), (-0.23, sgn * 0.086, wz1 + 0.004)],
+                      BODY_PINK))
+    return faces
 
 
 def build_hood_polys(cardef, fr):
@@ -339,8 +413,8 @@ def build_hood_polys(cardef, fr):
         for fc in [(0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7), (4, 5, 6, 7)]:
             polys.append((tr([c[i] for i in fc]), color))
 
-    box(0.02, hl, -hw, hw, 0.012, 0.052, (235, 90, 30))      # hood
-    box(hl - 0.03, hl, -hw, hw, 0.052, 0.058, (210, 78, 24)) # nose lip
+    box(0.07, hl, -hw * 0.88, hw * 0.88, 0.012, 0.048, BODY_PINK)            # hood
+    box(hl - 0.03, hl, -hw * 0.88, hw * 0.88, 0.048, 0.054, (188, 44, 122))  # nose lip
     for wy_ in (tw, -tw):  # front wheels (steered)
         cs, sn = math.cos(steer), math.sin(steer)
         ring = [(rw * math.cos(math.pi / 3 * i), rw * math.sin(math.pi / 3 * i)) for i in range(6)]
@@ -378,7 +452,7 @@ def solve_homography(world_pts, tex_pts, scr_pts):
     return np.linalg.solve(np.array(A), np.array(b))
 
 
-def render_view(cam, ground, solids, sky_cache, w, h):
+def render_view(cam, ground, solids, sky_cache, w, h, near=0.05):
     """cam: CameraBasis. solids: list of (pts, color, shaded)."""
     # ground homography: 4 points in front of the camera on z=0
     az = math.atan2(cam.fwd[1], cam.fwd[0])
@@ -417,7 +491,7 @@ def render_view(cam, ground, solids, sky_cache, w, h):
     items.sort(key=lambda it: -it[0])
     for d, pts, color, shaded in items:
         scr, dep = cam.project(pts)
-        if (dep < 0.05).any():
+        if (dep < near).any():
             continue
         if (scr[:, 0] < -300).all() or (scr[:, 0] > w + 300).all() \
            or (scr[:, 1] < -300).all() or (scr[:, 1] > h + 300).all():
@@ -480,14 +554,16 @@ def render(telemetry_path, out_path, max_laps=None):
     lap_times = data["lapTimes"]
     hist = []
     HIST_N = 240  # 4 s of strip-chart history
+    RW, RH = W * 3 // 2, H * 3 // 2          # 1.5x supersampling
+    PW, PH = PIP_W * 3 // 2, PIP_H * 3 // 2
     for fi, fr in enumerate(frames):
         cam.update((fr["x"], fr["y"]), 1.0 / fps_in)
-        B = cam.basis()
+        B = cam.basis(RW, RH)
 
         carpolys = [(p, c, True) for p, c in build_car_polys(data["car"], fr)]
         shadow = [(car_shadow(data["car"], fr), (30, 30, 34, 110), False)]
         solids = statics + shadow + carpolys
-        img = render_view(B, ground, solids, sky, W, H)
+        img = render_view(B, ground, solids, sky, RW, RH).resize((W, H), Image.LANCZOS)
 
         # ---- in-car PIP (cockpit cam: hood fixed in view, world rolls) ----
         yaw, roll, pitch = fr["yaw"], fr.get("roll", 0.0), fr.get("pitch", 0.0)
@@ -495,9 +571,10 @@ def render(telemetry_path, out_path, max_laps=None):
         eye = (fr["x"] - dyaw[0] * 0.03, fr["y"] - dyaw[1] * 0.03, 0.092)
         look = (eye[0] + dyaw[0] * 5, eye[1] + dyaw[1] * 5,
                 0.092 - 0.042 - pitch * 2.5)
-        pipB = CameraBasis(eye, look, math.radians(74), PIP_W, PIP_H, up_roll=-roll)
+        pipB = CameraBasis(eye, look, math.radians(74), PW, PH, up_roll=-roll)
         hood = [(p, c, True) for p, c in build_hood_polys(data["car"], fr)]
-        pip = render_view(pipB, ground, statics + hood, sky, PIP_W, PIP_H)
+        pip = render_view(pipB, ground, statics + hood, sky, PW, PH, near=0.085).resize(
+            (PIP_W, PIP_H), Image.LANCZOS)
         pd = ImageDraw.Draw(pip)
         pd.rectangle([0, 0, PIP_W - 1, PIP_H - 1], outline=(20, 22, 28), width=3)
         pd.text((10, PIP_H - 26), "IN-CAR", font=F_SML, fill=(255, 255, 255))

@@ -7,6 +7,9 @@ import { Driver, computeRacingLine } from '../sim/driver.js';
 import { World } from '../sim/world.js';
 import { makeSurface } from '../sim/surface.js';
 import { StandCamera, drawScene, prepareGeometry, buildCarPolys, centroid } from './render.js';
+import { CarSound } from './sound.js';
+
+const sound = new CarSound();
 
 const canvas = document.getElementById('view');
 const ctx = canvas.getContext('2d');
@@ -43,8 +46,10 @@ function setTrack(name) {
   params = motorClass === 'mod' ? TC_PARAMS_MOD : TC_PARAMS;
   car = new Car(params);
   const opts = motorClass === 'mod'
-    ? { speed: { ayMax: 22, axBrake: 17, axAccel: 15, vTop: 32 }, kp: 1.1 }
-    : { speed: { ayMax: 21, axBrake: 15, axAccel: 12, vTop: 19 }, kp: 1.1 };
+    ? { speed: { ayMax: 22, axBrake: 17, axAccel: 15, vTop: 32 }, kp: 1.1,
+        line: { margin: 0.26, iterations: 2000 } }
+    : { speed: { ayMax: 21, axBrake: 15, axAccel: 12, vTop: 19 }, kp: 1.1,
+        line: { margin: 0.26, iterations: 2000 } };
   world = new World(track, car);
   driver = new Driver(track, car, opts);
   car.surfaceFn = makeSurface(track, driver.line);
@@ -59,6 +64,7 @@ function setTrack(name) {
 const keys = {};
 addEventListener('keydown', e => {
   keys[e.code] = true;
+  sound.ensure();
   if (e.code === 'KeyR') world.placeAtStart(1.0);
   if (e.code === 'KeyC') camera.mode = camera.mode === 'stand' ? 'chase' : camera.mode === 'chase' ? 'top' : 'stand';
   if (e.code === 'KeyA') aiMode = !aiMode;
@@ -163,6 +169,7 @@ function frame(now) {
   });
 
   camera.update(car, dt);
+  sound.update(car);
   const B = camera.basis(canvas.width, canvas.height);
   const carPolys = buildCarPolys(params, car).map(p => ({ ...p, cen: centroid(p.pts) }));
   // contact shadow

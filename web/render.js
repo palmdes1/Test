@@ -78,6 +78,51 @@ function shade(color, pts) {
   return `rgb(${color.map(c => Math.min(255, c * b) | 0).join(',')})`;
 }
 
+// Lofted 1:10 TC shell: cross-sections (x, half width, roof height).
+const SHELL_SECTIONS = [
+  [0.215, 0.052, 0.030], [0.185, 0.080, 0.040], [0.130, 0.091, 0.050],
+  [0.060, 0.094, 0.058], [0.010, 0.093, 0.090], [-0.060, 0.091, 0.097],
+  [-0.115, 0.089, 0.088], [-0.165, 0.090, 0.064], [-0.215, 0.082, 0.056]
+];
+const BODY_PINK = [228, 64, 152], GLASS = [38, 52, 72], Z_LOW = 0.014;
+
+function shellRing([x, w, roof]) {
+  const belt = Math.min(0.054, roof - 0.004);
+  return [[x, -w, Z_LOW], [x, -w * 0.92, belt], [x, -w * 0.55, roof],
+          [x, w * 0.55, roof], [x, w * 0.92, belt], [x, w, Z_LOW]];
+}
+
+let SHELL_CACHE = null;
+function shellFaces() {
+  if (SHELL_CACHE) return SHELL_CACHE;
+  const faces = [];
+  const rings = SHELL_SECTIONS.map(shellRing);
+  for (let i = 0; i < rings.length - 1; i++) {
+    const a = rings[i], b = rings[i + 1];
+    for (let k = 0; k < 5; k++) {
+      const quad = [a[k], a[k + 1], b[k + 1], b[k]];
+      const ax = (a[k][0] + b[k][0]) / 2;
+      const az = quad.reduce((s, pt) => s + pt[2], 0) / 4;
+      const glass = az > 0.062 && ax > -0.15 && ax < 0.05 && !(ax > -0.055 && ax < 0);
+      faces.push({ pts: quad, color: glass ? GLASS : BODY_PINK });
+    }
+  }
+  faces.push({ pts: rings[0], color: BODY_PINK });
+  faces.push({ pts: rings[rings.length - 1].slice().reverse(), color: BODY_PINK });
+  const wz0 = 0.092, wz1 = 0.099;
+  faces.push({ pts: [[-0.225, -0.086, wz1], [-0.185, -0.086, wz1], [-0.185, 0.086, wz1], [-0.225, 0.086, wz1]], color: [245, 245, 245] });
+  faces.push({ pts: [[-0.225, -0.086, wz0], [-0.185, -0.086, wz0], [-0.185, 0.086, wz0], [-0.225, 0.086, wz0]], color: [200, 200, 205] });
+  for (const sgn of [-1, 1]) {
+    faces.push({
+      pts: [[-0.23, sgn * 0.086, wz0 - 0.012], [-0.18, sgn * 0.086, wz0 - 0.012],
+            [-0.18, sgn * 0.086, wz1 + 0.004], [-0.23, sgn * 0.086, wz1 + 0.004]],
+      color: BODY_PINK
+    });
+  }
+  SHELL_CACHE = faces;
+  return faces;
+}
+
 export function buildCarPolys(p, car) {
   const hl = p.halfLength, hw = p.halfWidth, rw = p.wheelRadius, a = p.a, tw = p.track / 2;
   const cy = Math.cos(car.yaw), sy = Math.sin(car.yaw);
@@ -98,10 +143,9 @@ export function buildCarPolys(p, car) {
     }
   };
   tiltBody = true;
-  box(-hl, hl, -hw, hw, 0.012, 0.052, [235, 90, 30]);
-  box(-hl * 0.55, hl * 0.45, -hw * 0.78, hw * 0.78, 0.052, 0.105, [40, 60, 85]);
-  box(-hl * 0.5, hl * 0.4, -hw * 0.25, hw * 0.25, 0.105, 0.108, [250, 250, 250]);
-  box(-hl - 0.005, -hl + 0.035, -hw * 0.85, hw * 0.85, 0.085, 0.095, [235, 90, 30]);
+  for (const f of shellFaces()) {
+    polys.push({ pts: f.pts.map(pt => tr(...pt)), color: f.color });
+  }
   tiltBody = false;
   // wheels (hex prisms)
   const wheels = [[a, tw, car.steer], [a, -tw, car.steer], [-a, tw, 0], [-a, -tw, 0]];

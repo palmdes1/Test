@@ -2,12 +2,13 @@
 
 A physics-realistic radio-controlled car racing simulator (VRC Pro inspired).
 A 1/10 electric touring car — 13.5T blinky stock or **5.5T modified** — on an
-**oval**, a **figure-8**, and a **Luxembourg-inspired** 249 m outdoor asphalt
-circuit (modeled after the Mini Circuit "Ville de Luxembourg" style featured
-in VRC Pro: long main straight, fast sweepers, tight infield). The view is a
-true **driver's-stand camera** — fixed elevated stand with auto-zoom, exactly
-like standing on the rostrum — and the offline renderer adds a parallel
-**onboard roof-cam** picture-in-picture.
+**oval**, a **figure-8**, and a reconstruction of the **VRC Pro Luxembourg**
+outdoor asphalt circuit (211 m, rebuilt from replay footage: divided main
+straight with center rail, big carousel, kerbed esses, island loops, final
+hairpin). The view is a true **driver's-stand camera** — fixed elevated stand
+with auto-zoom, exactly like standing on the rostrum — and the offline
+renderer adds a parallel **in-car cockpit** picture-in-picture plus
+synthesized **motor and tire audio**.
 
 The vehicle model is a real dynamic simulation — Pacejka combined-slip tires
 with load sensitivity and camber thrust, a sprung chassis with heave/pitch/roll
@@ -70,10 +71,12 @@ tools/    validation, headless lap runner, MP4 renderer
 | Track | Car | Ideal (QSS optimum) | Best AI lap | Gap |
 |---|---|---|---|---|
 | Oval 75.4 m | 13.5T | 5.30 s | 5.61 s | 0.31 s |
-| Luxembourg 249.3 m | 5.5T mod | 16.59 s | 16.94 s | 0.35 s |
+| Luxembourg 210.9 m | 5.5T mod | 15.82 s | 16.06 s | 0.24 s |
 
-Luxembourg: 102 km/h on the straight, ~2.2 g in the sweepers, lap times build
-17.79 → 16.94 s as tire temps climb from 34 °C to the upper 40s.
-`tools/telemetry_sheet.py` renders an engineering sheet (speed/pedals,
-steering/yaw rate, roll/pitch, shock travel, tire temps, g-g diagram) for
-model validation.
+Luxembourg: 91 km/h on the straight, ~2.2 g in the carousel, lap times build
+16.65 → 16.06 s as tire temps climb from 34 °C into the upper 40s. The speed
+profile uses friction-circle coupled passes (trail braking, progressive exit
+throttle). `tools/telemetry_sheet.py` renders an engineering sheet
+(speed/pedals, steering/yaw rate, roll/pitch, shock travel, tire temps, g-g
+diagram); `tools/make_audio.py` synthesizes motor whine + tire scrub from
+telemetry and muxes it into the video.

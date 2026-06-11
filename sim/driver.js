@@ -57,7 +57,9 @@ export function computeRacingLine(track, { margin = 0.32, iterations = 1400, lam
 }
 
 /**
- * Curvature-limited speed profile with braking/acceleration passes.
+ * Curvature-limited speed profile with friction-circle braking/acceleration
+ * passes: longitudinal capacity shrinks as cornering load rises (trail
+ * braking / progressive exit throttle, like a real driver).
  */
 export function computeSpeedProfile(line, { ayMax = 19.5, axBrake = 13.5, axAccel = 11, vTop = 18.5 } = {}) {
   const n = line.n;
@@ -71,15 +73,18 @@ export function computeSpeedProfile(line, { ayMax = 19.5, axBrake = 13.5, axAcce
     const k = Math.abs(line.curv[i]);
     v[i] = Math.min(vTop, k > 1e-6 ? Math.sqrt(ayMax / k) : vTop);
   }
-  // backward pass (braking) and forward pass (acceleration), run twice to wrap the loop
-  for (let pass = 0; pass < 2; pass++) {
+  const avail = (ax, vi, i) => {
+    const latFrac = Math.min(1, (vi * vi * Math.abs(line.curv[i])) / ayMax);
+    return ax * Math.sqrt(Math.max(0.06, 1 - latFrac * latFrac));
+  };
+  for (let pass = 0; pass < 3; pass++) {
     for (let i = n - 1; i >= 0; i--) {
       const j = wrap(i + 1, n);
-      v[i] = Math.min(v[i], Math.sqrt(v[j] * v[j] + 2 * axBrake * ds[i]));
+      v[i] = Math.min(v[i], Math.sqrt(v[j] * v[j] + 2 * avail(axBrake, v[j], j) * ds[i]));
     }
     for (let i = 0; i < n; i++) {
       const j = wrap(i + 1, n);
-      v[j] = Math.min(v[j], Math.sqrt(v[i] * v[i] + 2 * axAccel * ds[i]));
+      v[j] = Math.min(v[j], Math.sqrt(v[i] * v[i] + 2 * avail(axAccel, v[i], i) * ds[i]));
     }
   }
   return v;
