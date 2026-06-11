@@ -78,3 +78,21 @@ export const TC_PARAMS = {
   halfLength: 0.215,
   halfWidth: 0.095
 };
+
+// Modified-class variant: 5.5T sensored brushless (~6100 kV), geared for a
+// large outdoor asphalt track. Real mod TCs see ~100-125 km/h on big straights.
+export const TC_PARAMS_MOD = {
+  ...TC_PARAMS,
+  name: '1/10 Touring Car 5.5T modified',
+  motor: {
+    Kv: 6100 * Math.PI / 30, // rad/s per volt
+    R: 0.010,
+    Vbatt: 7.7,
+    Imax: 140,
+    IbrakeMax: 140
+  },
+  gearRatio: 4.0,
+  motorRotorInertia: 1.0e-6,
+  CdragV2: 0.013,          // mod body, more aggressive but draggier at speed
+  CdownV2: 0.010
+};

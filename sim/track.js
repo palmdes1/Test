@@ -95,7 +95,73 @@ export function buildFigure8() {
 }
 
 export function buildTrack(name) {
-  return name === 'figure8' ? buildFigure8() : buildOval();
+  if (name === 'figure8') return buildFigure8();
+  if (name === 'luxembourg') return buildLuxembourg();
+  return buildOval();
+}
+
+/** Turtle-style path builder: segments are ['S', len] or ['L'|'R', radius, degrees]. */
+function buildPath(segments, x0 = 0, y0 = 0, h0 = 0) {
+  let x = x0, y = y0, h = h0;
+  const pts = [];
+  for (const seg of segments) {
+    if (seg[0] === 'S') {
+      const x1 = x + Math.cos(h) * seg[1], y1 = y + Math.sin(h) * seg[1];
+      pts.push(...linePoints(x, y, x1, y1));
+      x = x1; y = y1;
+    } else {
+      const dir = seg[0] === 'L' ? 1 : -1;
+      const r = seg[1], ang = (seg[2] * Math.PI) / 180;
+      // arc center sits to the turning side of the current heading
+      const ccx = x + dir * -Math.sin(h) * r, ccy = y + dir * Math.cos(h) * r;
+      const a0 = Math.atan2(y - ccy, x - ccx);
+      const a1 = a0 + dir * ang;
+      pts.push(...arcPoints(ccx, ccy, r, a0, a1, dir === 1));
+      x = ccx + r * Math.cos(a1); y = ccy + r * Math.sin(a1);
+      h += dir * ang;
+    }
+  }
+  // distribute closure gap along the path (design should nearly close)
+  const gx = x0 - x, gy = y0 - y;
+  let total = 0;
+  const ds = [0];
+  for (let i = 1; i < pts.length; i++) {
+    total += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    ds.push(total);
+  }
+  for (let i = 0; i < pts.length; i++) {
+    const f = ds[i] / total;
+    pts[i][0] += gx * f;
+    pts[i][1] += gy * f;
+  }
+  return pts;
+}
+
+export function buildLuxembourg() {
+  // Inspired by the Mini Circuit "Ville de Luxembourg" (LMCC) outdoor asphalt
+  // track as featured in VRC Pro: ~270 m, 4 m lanes, a long main straight,
+  // fast sweepers and a tight infield with hairpins and a chicane.
+  const pts = buildPath([
+    ['S', 50],            // main straight
+    ['L', 8, 180],        // T1: fast 180 sweeper
+    ['S', 30],            // top straight (heading back)
+    ['R', 5, 90],         // T2: fast right up into the infield
+    ['S', 8],
+    ['L', 3, 90],         // T3
+    ['S', 16],            // upper-left straight
+    ['L', 3, 90],         // T4
+    ['S', 6],
+    ['L', 3.5, 90],       // T5
+    ['S', 10],
+    ['R', 3, 90],         // T6: right
+    ['S', 3],
+    ['L', 3, 90],         // T7: chicane exit
+    ['S', 20],            // middle straight
+    ['R', 2.5, 180],      // T8: right hairpin
+    ['S', 32.5],          // back straight
+    ['L', 2.75, 180]      // T9: slow 180 onto the main straight
+  ]);
+  return finalize('luxembourg', pts, 4.0, { x: 25, y: -7.5, z: 2.6 }, [10, 0]);
 }
 
 // ---------------------------------------------------------------------------

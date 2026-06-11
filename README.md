@@ -1,10 +1,13 @@
 # RC Racing Sim — 1/10 EP Touring Car
 
 A physics-realistic radio-controlled car racing simulator (VRC Pro inspired).
-Step 1: a 1/10 electric touring car (13.5T blinky spec) on an **oval** and a
-**figure-8** track, with a true **driver's-stand camera** — you watch your car
-from a fixed elevated stand and the view auto-zooms, exactly like standing on
-the rostrum.
+A 1/10 electric touring car — 13.5T blinky stock or **5.5T modified** — on an
+**oval**, a **figure-8**, and a **Luxembourg-inspired** 249 m outdoor asphalt
+circuit (modeled after the Mini Circuit "Ville de Luxembourg" style featured
+in VRC Pro: long main straight, fast sweepers, tight infield). The view is a
+true **driver's-stand camera** — fixed elevated stand with auto-zoom, exactly
+like standing on the rostrum — and the offline renderer adds a parallel
+**onboard roof-cam** picture-in-picture.
 
 The vehicle model is a real dynamic simulation — Pacejka combined-slip tires
 with load sensitivity and camber thrust, a sprung chassis with heave/pitch/roll
@@ -29,20 +32,24 @@ npm run serve          # python3 -m http.server 8000
 | A | toggle AI driver |
 | C | camera: stand → chase → top |
 | R | reset to start line |
-| 1 / 2 | oval / figure-8 |
+| M | motor: 13.5T stock ↔ 5.5T mod |
+| 1 / 2 / 3 | oval / figure-8 / luxembourg |
 
 ## Headless tools
 
 ```bash
 node tools/validate.mjs              # physics benchmarks vs real-world targets
 node tools/run_lap.mjs oval 3        # AI drives 3 laps, writes telemetry JSON
-node tools/run_lap.mjs figure8 3
+node tools/run_lap.mjs luxembourg 2  # 5.5T mod class on the big track
 pip install pillow numpy imageio imageio-ffmpeg
-python3 tools/render_video.py out/oval_telemetry.json out/oval_lap.mp4
+python3 tools/render_video.py out/luxembourg_telemetry.json out/luxembourg_lap.mp4
 ```
 
-The video renderer reproduces the in-game driver's-stand camera and HUD
-(lap timer, speed, throttle/brake/steering, minimap).
+The video renderer builds a top-down ground texture (asphalt grain, rubber
+groove, painted curbs, edge lines, grass, concrete apron) and perspective-warps
+it per frame with a plane homography, then draws the 3D solids on top. Views:
+driver's stand (main) + onboard roof-cam PIP, with lap timer, speed, lat/lon g,
+pedals and minimap.
 
 ## Layout
 
@@ -60,5 +67,7 @@ tools/    validation, headless lap runner, MP4 renderer
 
 ## Results (AI laps)
 
-- Oval (75.4 m, 3.5 m lane): best lap **5.68 s**, top speed 67 km/h
-- Figure-8 (79.2 m, 3 m lane): best lap **6.60 s**, top speed 62 km/h
+- Oval (75.4 m, 3.5 m lane), 13.5T: best lap **5.68 s**, top speed 67 km/h
+- Figure-8 (79.2 m, 3 m lane), 13.5T: best lap **6.60 s**, top speed 62 km/h
+- Luxembourg (249.3 m, 4 m lane), 5.5T mod: best lap **16.67 s**,
+  102 km/h on the main straight, 2.1 g sustained in the sweepers

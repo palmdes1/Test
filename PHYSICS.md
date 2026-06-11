@@ -102,6 +102,9 @@ high-speed corner grip).
 | Steady-state roll | 1.7–2.0° at max lateral | 1–4° (stiff TC suspension) | spring-rate / CG calc |
 | Step-steer | stable, 1.3× yaw overshoot | stable with mild overshoot | typical TC transient |
 | Oval lap (75 m) | 5.6 s ≈ 13.4 m/s avg | club TC averages ~8–13 m/s | typical lap-length/time ratios |
+| 5.5T mod top speed | 34.1 m/s (123 km/h) | ~100–125 km/h, 5.5T ≈ 5900–6300 kV | [Hobbywing V10 G3](https://www.hobbywingdirect.com/products/xerun-v10-g3-motors), [Turnigy 5.5T 6075 kV](https://hobbyking.com/en_us/turnigy-trackstar-5-5t-sensored-brushless-motor-6075kv-roar-approved.html) |
+| 5.5T launch | 1.57 g (current-limited) | ~1.5–2.0 g | ESC current limit calc |
+| Luxembourg lap (249 m) | 16.7 s ≈ 15.0 m/s avg | mod TC on big outdoor asphalt ~15–18 s | typical lap-length/time ratios |
 
 The AI's lap shape matches what you see in real TC racing and VRC Pro: hard
 ESC braking into the turn with slight rotation as load transfers forward,

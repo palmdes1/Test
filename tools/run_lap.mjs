@@ -5,20 +5,27 @@
 
 import { writeFileSync } from 'node:fs';
 import { Car } from '../sim/car.js';
-import { TC_PARAMS } from '../sim/params.js';
+import { TC_PARAMS, TC_PARAMS_MOD } from '../sim/params.js';
 import { buildTrack, trackGeometry } from '../sim/track.js';
 import { Driver } from '../sim/driver.js';
 import { World } from '../sim/world.js';
 
 const trackName = process.argv[2] || 'oval';
 const lapsWanted = parseInt(process.argv[3] || '2', 10);
+const motorClass = process.argv[5] || (trackName === 'luxembourg' ? 'mod' : 'stock');
 const outFile = process.argv[4] || `out/${trackName}_telemetry.json`;
 
+const PARAMS = motorClass === 'mod' ? TC_PARAMS_MOD : TC_PARAMS;
+const driverOpts = motorClass === 'mod'
+  ? { speed: { ayMax: 21, axBrake: 16, axAccel: 14, vTop: 32 } }
+  : {};
+
 const track = buildTrack(trackName);
-const car = new Car(TC_PARAMS);
+const car = new Car(PARAMS);
 const world = new World(track, car);
-const driver = new Driver(track, car);
+const driver = new Driver(track, car, driverOpts);
 world.placeAtStart(1.0);
+console.log(`Car: ${PARAMS.name}`);
 
 const FPS = 60;
 const frames = [];
@@ -69,11 +76,12 @@ writeFileSync(outFile, JSON.stringify({
   geometry: trackGeometry(track),
   racingLine,
   car: {
-    halfLength: TC_PARAMS.halfLength, halfWidth: TC_PARAMS.halfWidth,
-    wheelRadius: TC_PARAMS.wheelRadius, wheelbase: TC_PARAMS.wheelbase,
-    a: TC_PARAMS.a, track: TC_PARAMS.track
+    halfLength: PARAMS.halfLength, halfWidth: PARAMS.halfWidth,
+    wheelRadius: PARAMS.wheelRadius, wheelbase: PARAMS.wheelbase,
+    a: PARAMS.a, track: PARAMS.track
   },
   fps: FPS,
+  carName: PARAMS.name,
   lapTimes: world.lapTimes,
   frames
 }));

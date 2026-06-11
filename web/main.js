@@ -1,7 +1,7 @@
 // Browser game: keyboard-driven 1/10 TC on oval / figure-8, driver's stand view.
 
 import { Car } from '../sim/car.js';
-import { TC_PARAMS } from '../sim/params.js';
+import { TC_PARAMS, TC_PARAMS_MOD } from '../sim/params.js';
 import { buildTrack, trackGeometry } from '../sim/track.js';
 import { Driver, computeRacingLine } from '../sim/driver.js';
 import { World } from '../sim/world.js';
@@ -11,7 +11,8 @@ const canvas = document.getElementById('view');
 const ctx = canvas.getContext('2d');
 
 let trackName = 'oval';
-let track, world, car, camera, scenery, driver, aiMode = false;
+let motorClass = 'stock';
+let track, world, car, camera, scenery, driver, params, aiMode = false;
 
 function grooveDecals(track) {
   const line = computeRacingLine(track);
@@ -38,13 +39,17 @@ function grooveDecals(track) {
 function setTrack(name) {
   trackName = name;
   track = buildTrack(name);
-  car = new Car(TC_PARAMS);
+  params = motorClass === 'mod' ? TC_PARAMS_MOD : TC_PARAMS;
+  car = new Car(params);
+  const opts = motorClass === 'mod'
+    ? { speed: { ayMax: 21, axBrake: 16, axAccel: 14, vTop: 32 } } : {};
   world = new World(track, car);
-  driver = new Driver(track, car);
+  driver = new Driver(track, car, opts);
   world.placeAtStart(1.0);
   camera = new StandCamera(track.stand);
   scenery = prepareGeometry([...trackGeometry(track), ...grooveDecals(track)]);
-  document.getElementById('trackname').textContent = name.toUpperCase();
+  document.getElementById('trackname').textContent =
+    `${name.toUpperCase()} — ${params.name}`;
 }
 
 // --- input: keyboard with analog-feel ramps ---
@@ -54,8 +59,13 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyR') world.placeAtStart(1.0);
   if (e.code === 'KeyC') camera.mode = camera.mode === 'stand' ? 'chase' : camera.mode === 'chase' ? 'top' : 'stand';
   if (e.code === 'KeyA') aiMode = !aiMode;
-  if (e.code === 'Digit1') setTrack('oval');
-  if (e.code === 'Digit2') setTrack('figure8');
+  if (e.code === 'Digit1') { motorClass = 'stock'; setTrack('oval'); }
+  if (e.code === 'Digit2') { motorClass = 'stock'; setTrack('figure8'); }
+  if (e.code === 'Digit3') { motorClass = 'mod'; setTrack('luxembourg'); }
+  if (e.code === 'KeyM') {
+    motorClass = motorClass === 'mod' ? 'stock' : 'mod';
+    setTrack(trackName);
+  }
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
@@ -106,7 +116,7 @@ function hud() {
   ctx.beginPath(); ctx.moveTo(60, h - 28); ctx.lineTo(180, h - 28); ctx.stroke();
   ctx.fillStyle = '#fff';
   ctx.beginPath();
-  ctx.arc(120 - car.steer / TC_PARAMS.maxSteer * 60, h - 28, 5, 0, 7);
+  ctx.arc(120 - car.steer / params.maxSteer * 60, h - 28, 5, 0, 7);
   ctx.fill();
   if (aiMode) {
     ctx.fillStyle = '#ffd778';
@@ -151,10 +161,10 @@ function frame(now) {
 
   camera.update(car, dt);
   const B = camera.basis(canvas.width, canvas.height);
-  const carPolys = buildCarPolys(TC_PARAMS, car).map(p => ({ ...p, cen: centroid(p.pts) }));
+  const carPolys = buildCarPolys(params, car).map(p => ({ ...p, cen: centroid(p.pts) }));
   // contact shadow
   const cy = Math.cos(car.yaw), sy = Math.sin(car.yaw);
-  const hl = TC_PARAMS.halfLength * 1.05, hw = TC_PARAMS.halfWidth * 1.15;
+  const hl = params.halfLength * 1.05, hw = params.halfWidth * 1.15;
   const shadow = {
     color: [40, 40, 45],
     pts: [[-hl, -hw], [hl, -hw], [hl, hw], [-hl, hw]].map(([lx, ly]) =>

@@ -6,7 +6,7 @@
 //  - skidpad:    2.0-3.0 g steady lateral on high-grip asphalt/carpet
 
 import { Car } from '../sim/car.js';
-import { TC_PARAMS } from '../sim/params.js';
+import { TC_PARAMS, TC_PARAMS_MOD } from '../sim/params.js';
 
 const DT = 1 / 5000;
 
@@ -87,4 +87,20 @@ console.log(`Validating: ${TC_PARAMS.name}\n`);
   }
   const overshoot = rPeak / Math.max(rEnd, 1e-6);
   console.log(`Step steer    : yaw rate peak ${rPeak.toFixed(2)} rad/s, settle ${rEnd.toFixed(2)} rad/s (overshoot x${overshoot.toFixed(2)})`);
+}
+
+// --- 6. Modified class (5.5T): top speed and launch ---
+{
+  console.log(`\nValidating: ${TC_PARAMS_MOD.name}\n`);
+  const car = new Car(TC_PARAMS_MOD);
+  let t = 0, t30 = null, vmax = 0, axMax = 0;
+  while (t < 10) {
+    car.setControls(0, 1, 0);
+    car.step(DT); t += DT;
+    if (t30 === null && car.x >= 30) t30 = t;
+    vmax = Math.max(vmax, car.vx);
+    axMax = Math.max(axMax, car.axF);
+  }
+  console.log(`Top speed     : ${vmax.toFixed(1)} m/s (${(vmax * 3.6).toFixed(0)} km/h)  [target 100-125 km/h]`);
+  console.log(`0-30 m        : ${t30.toFixed(2)} s, launch ${(axMax / 9.81).toFixed(2)} g  [target ~1.5-2.0 g]`);
 }
