@@ -75,6 +75,56 @@ function sunburstTexture() {
   return t;
 }
 
+// Printed chapter-ring artwork: ivory band, minute track, Roman numerals.
+// Drawn in plan view; mapped planar onto the ring geometry.
+// geomR = outer radius of the ring geometry in world units.
+export function chapterTexture(geomR, rIn, rOut) {
+  const S = 1024;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d');
+  const u = S / 2 / geomR; // world unit -> px
+  const cx = S / 2, cy = S / 2;
+  // ivory band
+  g.fillStyle = '#ece7da';
+  g.beginPath();
+  g.arc(cx, cy, rOut * u, 0, Math.PI * 2);
+  g.arc(cx, cy, rIn * u, 0, Math.PI * 2, true);
+  g.fill();
+  // minute track
+  g.strokeStyle = '#23262e';
+  for (let i = 0; i < 60; i++) {
+    const a = (i / 60) * Math.PI * 2;
+    const big = i % 5 === 0;
+    g.lineWidth = big ? 5 : 2.5;
+    const r0 = (big ? rOut - 0.85 : rOut - 0.6) * u;
+    const r1 = (rOut - 0.18) * u;
+    g.beginPath();
+    g.moveTo(cx + r0 * Math.sin(a), cy - r0 * Math.cos(a));
+    g.lineTo(cx + r1 * Math.sin(a), cy - r1 * Math.cos(a));
+    g.stroke();
+  }
+  // Roman numerals, upright-radial orientation
+  const numerals = ['XII', 'I', 'II', 'III', 'IIII', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
+  g.fillStyle = '#16181d';
+  g.font = `bold ${Math.round(0.95 * u)}px Georgia, serif`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  const rN = (rIn + 0.78) * u;
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    g.save();
+    g.translate(cx + rN * Math.sin(a), cy - rN * Math.cos(a));
+    g.rotate(a);
+    g.fillText(numerals[i], 0, 0);
+    g.restore();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+
 export function createMaterials() {
   const geneva = genevaTexture();
   const perlage = perlageTexture();

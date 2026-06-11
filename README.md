@@ -4,7 +4,7 @@ A mechanically coherent Swiss lever watch movement rendered in Three.js.
 Every wheel turns at the physically correct rate: the gear ratios are real,
 so the hands tell actual time, driven backwards from the escapement.
 
-![overview](iterations/iter-010-overview.png)
+![overview](iterations/iter-011-overview.png)
 
 ## The gear train (18,000 bph)
 

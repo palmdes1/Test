@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { makeWheel, makePinion, makeEscapeWheel, makeRatchetWheel } from './gears.js';
 import { anglesAt, TEETH, BALANCE_AMP } from './kinematics.js';
+import { chapterTexture } from './materials.js';
 
 const TAU = Math.PI * 2;
 
@@ -134,6 +135,13 @@ export function buildMovement(M) {
     const plate = new THREE.Mesh(geo, M.plate);
     plate.position.z = -2.0;
     root.add(plate);
+    // shallow recessed sinks under the wheels (decorative depth)
+    const sinkMat = new THREE.MeshStandardMaterial({ color: 0xb3954a, metalness: 0.8, roughness: 0.55 });
+    for (const [p, r] of [[L.center, 12.0], [L.third, 10.2], [L.fourth, 9.7], [L.escape, 4.8], [L.balance, 7.0]]) {
+      const sink = new THREE.Mesh(new THREE.CircleGeometry(r, 64), sinkMat);
+      sink.position.set(p.x, p.y, 0.015);
+      root.add(sink);
+    }
     // lower pivot jewels visible in the plate top
     for (const p of [L.third, L.fourth, L.escape, L.palletPivot, L.balance]) {
       const j = jewel(M, 0.5);
@@ -422,6 +430,15 @@ export function buildMovement(M) {
     const cs = screw(M, 0.6);
     cs.position.set(-15.2, 17.4, L.zBarrelBridge[1] + 0.52);
     root.add(cs);
+    // click (pawl) engaging the ratchet teeth
+    const click = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.75, 0.3), M.polishedSteel);
+    click.userData.tag = 'bridge';
+    click.position.set(-11.9, 15.6, L.zBarrelBridge[1] + 0.45);
+    click.rotation.z = dirTo(new THREE.Vector2(-13.1, 16.2), new THREE.Vector2(-10.6, 14.9));
+    root.add(click);
+    const clickScrew = screw(M, 0.4);
+    clickScrew.position.set(-13.1, 16.2, L.zBarrelBridge[1] + 0.62);
+    root.add(clickScrew);
   }
 
   // train bridge (lower right), jewels for third/fourth/escape
@@ -512,26 +529,19 @@ export function buildMovement(M) {
       root.add(tick);
     }
 
-    // chapter ring with applied markers and a printed minute track
-    const chap = new THREE.Mesh(new THREE.RingGeometry(22.0, 23.6, 128), M.silverDial);
+    // printed enamel-style chapter ring (minute track + Roman numerals)
+    const chapMat = new THREE.MeshStandardMaterial({
+      map: chapterTexture(23.6, 22.0, 23.6), metalness: 0.05, roughness: 0.5,
+      transparent: true,
+    });
+    const chap = new THREE.Mesh(new THREE.RingGeometry(22.0, 23.6, 192), chapMat);
     chap.position.z = 5.0;
     root.add(chap);
-    const tickMat = new THREE.MeshStandardMaterial({ color: 0x14161b, roughness: 0.6 });
-    for (let i = 0; i < 60; i++) {
-      const a = (i / 60) * TAU;
-      if (i % 5 === 0) continue;
-      const tick = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.7, 0.06), tickMat);
-      tick.position.set(23.0 * Math.sin(a), 23.0 * Math.cos(a), 5.04);
-      tick.rotation.z = -a;
-      root.add(tick);
-    }
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * TAU;
-      const len = i % 3 === 0 ? 1.6 : 1.1;
-      const marker = new THREE.Mesh(new THREE.BoxGeometry(0.5, len, 0.22), M.gold);
-      marker.position.set(22.8 * Math.sin(a), 22.8 * Math.cos(a), 5.12);
-      marker.rotation.z = -a;
-      root.add(marker);
+    // thin polished bezel edges
+    for (const r of [22.0, 23.6]) {
+      const edge = new THREE.Mesh(new THREE.TorusGeometry(r, 0.12, 8, 128), M.gold);
+      edge.position.z = 5.0;
+      root.add(edge);
     }
     for (const a of [Math.PI / 2, Math.PI, (3 * Math.PI) / 2, 0.262]) {
       const foot = cyl(0.55, 0.7, 5.0, M.gold);
@@ -539,8 +549,8 @@ export function buildMovement(M) {
       root.add(foot);
     }
 
-    // hands: blued steel, lance style
-    function hand(len, w, hub) {
+    // hands: blued steel. Hour/minute are Breguet (open pomme + needle tip).
+    function lanceHand(len, w, hub) {
       const g = new THREE.Group();
       const s = new THREE.Shape();
       s.moveTo(-w, 0);
@@ -552,15 +562,42 @@ export function buildMovement(M) {
       s.lineTo(-w * 0.55, -len * 0.16);
       s.closePath();
       const geo = new THREE.ExtrudeGeometry(s, { depth: 0.1, bevelEnabled: false });
-      const m = new THREE.Mesh(geo, M.bluedSteel);
-      g.add(m);
+      g.add(new THREE.Mesh(geo, M.bluedSteel));
       const boss = cyl(hub, hub, 0.22, M.bluedSteel);
       g.add(boss);
       return g;
     }
-    hands.hour = hand(11.5, 0.85, 1.45);
+    function breguetHand(len, w, hub) {
+      const g = new THREE.Group();
+      const R = w * 2.4, pC = 0.70 * len;
+      const s = new THREE.Shape();
+      s.moveTo(-w * 0.55, -len * 0.16);
+      s.lineTo(-w, 0);
+      s.lineTo(-w * 0.4, pC - R - w * 0.3);
+      s.lineTo(-R, pC);
+      s.absarc(0, pC, R, Math.PI, 0.62 * Math.PI, true);
+      s.lineTo(-w * 0.13, pC + R + 0.02 * len);
+      s.lineTo(0, len);
+      s.lineTo(w * 0.13, pC + R + 0.02 * len);
+      s.lineTo(R * Math.cos(0.38 * Math.PI), pC + R * Math.sin(0.38 * Math.PI));
+      s.absarc(0, pC, R, 0.38 * Math.PI, 0, true);
+      s.lineTo(w * 0.4, pC - R - w * 0.3);
+      s.lineTo(w, 0);
+      s.lineTo(w * 0.55, -len * 0.16);
+      s.closePath();
+      const hole = new THREE.Path();
+      hole.absarc(0, pC, R * 0.6, 0, TAU, true);
+      s.holes.push(hole);
+      const geo = new THREE.ExtrudeGeometry(s, { depth: 0.1, bevelEnabled: false });
+      g.add(new THREE.Mesh(geo, M.bluedSteel));
+      const boss = cyl(hub, hub, 0.22, M.bluedSteel);
+      g.add(boss);
+      return g;
+    }
+    const hand = lanceHand;
+    hands.hour = breguetHand(13.5, 0.85, 1.45);
     hands.hour.position.set(0, 0, 6.08);
-    hands.minute = hand(20.5, 0.62, 1.0);
+    hands.minute = breguetHand(20.8, 0.62, 1.0);
     hands.minute.position.set(0, 0, 6.5);
     hands.second = hand(4.4, 0.2, 0.45);
     hands.second.position.set(L.fourth.x, L.fourth.y, L.zTrainBridge[1] + 0.22);
