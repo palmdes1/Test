@@ -7,10 +7,12 @@ from a fixed elevated stand and the view auto-zooms, exactly like standing on
 the rostrum.
 
 The vehicle model is a real dynamic simulation — Pacejka combined-slip tires
-with load sensitivity, four-wheel load transfer, belt 4WD with front spool and
-rear gear diff, brushless motor/ESC model, Ackermann + servo-rate steering —
-running at 5 kHz. See [PHYSICS.md](PHYSICS.md) for the full model and its
-validation against real-world RC racing data.
+with load sensitivity and camber thrust, a sprung chassis with heave/pitch/roll
+DOF on per-corner springs, dampers, anti-roll bars and bump stops, belt 4WD
+with front spool (or gear diff) and rear gear diff, brushless motor/ESC model,
+Ackermann + servo-rate steering — running at 5 kHz. See
+[PHYSICS.md](PHYSICS.md) for the full model and its validation against
+real-world RC racing data.
 
 ## Play it
 
@@ -58,5 +60,5 @@ tools/    validation, headless lap runner, MP4 renderer
 
 ## Results (AI laps)
 
-- Oval (75.4 m, 3.5 m lane): best lap **5.61 s**, top speed 67 km/h
-- Figure-8 (79.2 m, 3 m lane): best lap **6.58 s**, top speed 62 km/h
+- Oval (75.4 m, 3.5 m lane): best lap **5.68 s**, top speed 67 km/h
+- Figure-8 (79.2 m, 3 m lane): best lap **6.60 s**, top speed 62 km/h

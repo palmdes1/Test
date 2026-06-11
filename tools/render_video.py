@@ -96,18 +96,20 @@ def make_sky():
     return img
 
 
-def build_car_polys(cardef, x, y, yaw, steer):
+def build_car_polys(cardef, x, y, yaw, steer, roll=0.0, pitch=0.0):
     """Return list of (pts(n,3), color) for the car at pose, in world coords."""
     hl, hw = cardef["halfLength"], cardef["halfWidth"]
     rw = cardef["wheelRadius"]
     a = cardef["a"]
     tw = cardef["track"] / 2
     cy, sy = math.cos(yaw), math.sin(yaw)
+    body = [False]  # wheels toggle this off: they stay flat on the ground
 
     def tr(pts):
         out = []
         for px_, py_, pz in pts:
-            out.append((x + px_ * cy - py_ * sy, y + px_ * sy + py_ * cy, pz))
+            pz2 = pz + (py_ * roll - px_ * pitch if body[0] else 0.0)
+            out.append((x + px_ * cy - py_ * sy, y + px_ * sy + py_ * cy, pz2))
         return np.array(out)
 
     polys = []
@@ -119,17 +121,19 @@ def build_car_polys(cardef, x, y, yaw, steer):
         for fc in faces:
             polys.append((tr([c[i] for i in fc]), color))
 
-    body = (235, 90, 30)      # orange shell
+    shell = (235, 90, 30)     # orange shell
     dark = (30, 32, 38)
     glass = (40, 60, 85)
+    body[0] = True            # shell polys tilt with chassis roll/pitch
     # lower shell
-    box(-hl, hl, -hw, hw, 0.012, 0.052, body)
+    box(-hl, hl, -hw, hw, 0.012, 0.052, shell)
     # cabin / greenhouse
     box(-hl * 0.55, hl * 0.45, -hw * 0.78, hw * 0.78, 0.052, 0.105, glass)
     # roof stripe
     box(-hl * 0.5, hl * 0.4, -hw * 0.25, hw * 0.25, 0.105, 0.108, (250, 250, 250))
     # rear wing
-    box(-hl - 0.005, -hl + 0.035, -hw * 0.85, hw * 0.85, 0.085, 0.095, body)
+    box(-hl - 0.005, -hl + 0.035, -hw * 0.85, hw * 0.85, 0.085, 0.095, shell)
+    body[0] = False
 
     # wheels: hexagonal prisms
     for wx, wy_, st in ((a, tw, steer), (a, -tw, steer), (-a + (a - cardef["a"]), tw, 0.0), (-a, -tw, 0.0)):
@@ -248,7 +252,8 @@ def render(telemetry_path, out_path, fps_out=60, end_pad=0.5):
         draw_horizon_ground(draw, cam, right, up, fwd, f)
 
         # collect polys: statics + car
-        carpolys = build_car_polys(data["car"], fr["x"], fr["y"], fr["yaw"], fr["steer"])
+        carpolys = build_car_polys(data["car"], fr["x"], fr["y"], fr["yaw"], fr["steer"],
+                                   fr.get("roll", 0.0), fr.get("pitch", 0.0))
         ground_items = []   # coplanar decals: layer by height, no depth sort needed
         solid_items = []    # walls, stand, car: painter by depth
         for pts, color, kind, cen in statics:

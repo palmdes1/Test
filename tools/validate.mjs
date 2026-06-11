@@ -58,7 +58,7 @@ console.log(`Validating: ${TC_PARAMS.name}\n`);
   for (const v of [6, 8, 10]) {
     const car = new Car(TC_PARAMS);
     car.vx = v; car.omegaDrive = v / TC_PARAMS.wheelRadius;
-    let t = 0, ayMax = 0, spun = false;
+    let t = 0, ayMax = 0, rollMax = 0, spun = false;
     while (t < 6 && !spun) {
       const steer = Math.min(1, t / 5); // slow ramp
       // crude speed hold
@@ -68,9 +68,10 @@ console.log(`Validating: ${TC_PARAMS.name}\n`);
       const beta = Math.atan2(car.vy, Math.max(car.vx, 0.5));
       if (Math.abs(beta) > 0.5) { spun = true; break; }
       ayMax = Math.max(ayMax, Math.abs(car.ayF));
+      rollMax = Math.max(rollMax, Math.abs(car.phi));
     }
     const Rad = v * v / ayMax;
-    console.log(`Skidpad @${v} m/s: max steady ${(ayMax / 9.81).toFixed(2)} g (R=${Rad.toFixed(1)} m)${spun ? ' then spun' : ''}  [target 2.0-3.0 g]`);
+    console.log(`Skidpad @${v} m/s: max steady ${(ayMax / 9.81).toFixed(2)} g (R=${Rad.toFixed(1)} m), roll ${(rollMax * 57.3).toFixed(1)} deg${spun ? ' then spun' : ''}  [target 2.0-3.0 g, roll 1-4 deg]`);
   }
 }
 

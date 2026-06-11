@@ -11,10 +11,10 @@ tire contact patches, the motor, and aerodynamics.
 |---|---|
 | `x, y, yaw` | chassis pose in the world plane |
 | `vx, vy, r` | body-frame velocities and yaw rate |
-| `omegaDrive` | drivetrain speed (front spool + rear diff carrier) |
-| `deltaRear` | rear left/right wheel speed difference (gear diff action) |
+| `zH, phi, theta` (+rates) | sprung-chassis heave, roll and pitch |
+| `omegaDrive` | drivetrain speed (front axle / rear diff carrier) |
+| `deltaRear`, `deltaFront` | left/right wheel speed differences (gear diffs) |
 | `steer` | actual front wheel angle (servo slew-limited) |
-| `axF, ayF` | suspension-filtered specific force (drives load transfer) |
 
 Physics runs at **5 kHz** (semi-implicit Euler) so the stiff wheel-spin
 dynamics (tiny wheel inertia vs. high tire slip stiffness) stay stable.
@@ -34,21 +34,36 @@ velocity (including yaw-rate contribution) and its own rotational speed:
   RC touring cars corner far above 1 g due to scale effects (reported 2–3 g+).
 - Low-speed slip regularization so the model is stable down to standstill.
 
-## Load transfer (quasi-static suspension)
+## Suspension — sprung chassis with heave/pitch/roll DOF
 
-- Longitudinal transfer `m·ax·h/L`, lateral transfer `m·ay·h/t`.
-- Lateral transfer is split front/rear by a **roll-stiffness distribution**
-  parameter (0.52 front) — the standard balance tuning knob (sway bars /
-  springs on a real TC).
-- Transfers are first-order filtered (τ = 25 ms) to mimic spring/damper lag,
-  which produces realistic corner-entry/exit transient balance shifts.
+The chassis is a rigid body on four spring/damper corners:
 
-## Drivetrain — belt 4WD, front spool + rear gear diff
+- Per-corner wheel rate 340 N/m (~5 Hz ride frequency) with ~0.7-critical
+  damping, plus **bump stops** beyond 4 mm of travel.
+- **Anti-roll bars** front and rear couple left/right deflections — the
+  front/rear roll-stiffness split (~54% front) is the balance tuning knob,
+  exactly as on a real TC.
+- Roll/pitch moments come from the tire forces acting below the CG; the
+  **roll-center height** (6 mm) splits transfer into an elastic path through
+  the springs (lagged, transient) and an instantaneous geometric path, with a
+  small anti-dive/anti-squat fraction in pitch.
+- Wheel vertical loads are read directly off the suspension forces, so
+  corner-entry/exit balance shifts emerge from the spring/damper dynamics
+  instead of being prescribed.
+- Body **roll-induced camber** (with a camber-gain compensation factor) plus
+  static negative camber feed a camber-thrust term in the tire model.
+
+Steady-state checks: 1.7–2.0° roll at ~2.2 g lateral, ~1° pitch under
+braking — matching the stiff, low-roll stance of a real touring car.
+
+## Drivetrain — belt 4WD, front spool (or gear diff) + rear gear diff
 
 Like a modern TC (Xray T4 / Awesomatix style high-grip config):
 
-- Front axle is a **spool**: both front wheels locked to the drive shaft —
-  produces the characteristic on-power entry push and strong exit drive.
+- Front axle defaults to a **spool**: both front wheels locked to the drive
+  shaft — the characteristic on-power entry push and strong exit drive.
+  A front **gear diff** is selectable (`frontDrive: 'gear'`); as in reality
+  it frees up corner entry but is measurably harder to keep consistent.
 - Rear axle is an **open gear diff**: `deltaRear` integrates the left/right
   tire torque imbalance with viscous grease damping, letting the rear axle
   roll freely through corners.
@@ -84,6 +99,7 @@ high-speed corner grip).
 | Launch accel | 1.33 g (current-limited) | ~1.3–1.8 g | gearing/current-limit calc |
 | Braking 15→0 m/s | 6.9 m, 1.80 g peak | 1.5–2.2 g, 4-wheel ESC brake | drivetrain brake physics |
 | Skidpad steady lateral | 2.0–2.4 g | 2–3 g on high-grip surface | scale-grip reports, [The RC Racer](https://www.thercracer.com/2013/07/blinky-timing-gearing.html) gearing context |
+| Steady-state roll | 1.7–2.0° at max lateral | 1–4° (stiff TC suspension) | spring-rate / CG calc |
 | Step-steer | stable, 1.3× yaw overshoot | stable with mild overshoot | typical TC transient |
 | Oval lap (75 m) | 5.6 s ≈ 13.4 m/s avg | club TC averages ~8–13 m/s | typical lap-length/time ratios |
 
@@ -94,8 +110,8 @@ so the combined-slip budget isn't exceeded.
 
 ## Known simplifications (next steps)
 
-- No chassis heave/pitch/roll DOF (load transfer is quasi-static + filtered).
+- No unsprung-mass DOF (wheels follow the ground; no kerb/bump excitation yet).
 - No tire temperature/additive model, no carpet fiber directionality.
 - Single surface μ; no dust/groove evolution (the groove is cosmetic).
-- Kerbs/bumps and body-roll-induced camber change not yet modeled.
-- Open rear diff (no one-way / locked-diff options yet).
+- No one-way front diff or adjustable diff preload yet.
+- Setup (springs, ARBs, camber, diff) is parameter-file only — no in-game UI.

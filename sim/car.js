@@ -4,12 +4,13 @@
 // Wheels: 0=FL, 1=FR, 2=RL, 3=RR.
 //
 // Modeled effects:
-//  - Pacejka tires with load sensitivity and combined slip (friction ellipse)
-//  - quasi-static longitudinal + lateral load transfer with suspension lag,
-//    roll-stiffness distribution front/rear
+//  - Pacejka tires with load sensitivity, combined slip (friction ellipse)
+//    and camber thrust
+//  - sprung chassis: heave/pitch/roll DOF on per-corner springs and dampers
+//    with anti-roll bars and bump stops; wheel loads come from the suspension
 //  - brushless DC motor (Kv/R/current limit) with ESC drive & proportional brake
-//  - belt 4WD with front spool (front wheels locked to the drive shaft) and
-//    rear gear differential (left/right speed difference is a state)
+//  - belt 4WD with front spool (or gear diff) and rear gear differential
+//    (left/right speed differences are states)
 //  - servo slew-rate-limited steering with geometric Ackermann
 //  - aero drag, body downforce, rolling resistance
 
@@ -29,7 +30,13 @@ export class Car {
     this.steer = 0;                              // actual mean front wheel angle
     this.omegaDrive = 0;                         // drivetrain speed at wheels, rad/s
     this.deltaRear = 0;                          // omega_RL - omega_RR
-    this.axF = 0; this.ayF = 0;                  // filtered specific force (load transfer)
+    this.deltaFront = 0;                         // omega_FL - omega_FR (gear diff mode)
+    // sprung-chassis states (deviations from static equilibrium)
+    this.zH = 0; this.vzH = 0;                   // heave
+    this.phi = 0; this.dphi = 0;                 // roll  (+ = left side up)
+    this.theta = 0; this.dtheta = 0;             // pitch (+ = nose down)
+    this.axF = 0; this.ayF = 0;                  // filtered specific force (telemetry)
+    this._geo = null;
     // inputs
     this.steerCmd = 0; this.throttle = 0; this.brake = 0;
     // telemetry
@@ -70,24 +77,48 @@ export class Car {
     const wx = [p.a, p.a, -p.b, -p.b];
     const wy = [t2, -t2, t2, -t2];
 
-    // --- Vertical loads: static + filtered transfer + downforce ---
+    // --- Vertical loads from the sprung chassis (springs/dampers/ARBs) ---
     const v = this.speed;
     const down = p.CdownV2 * v * v;
     const statF = m * G * p.b / (2 * L), statR = m * G * p.a / (2 * L);
-    const longT = m * this.axF * p.hCG / (2 * L);           // per wheel, front loses under accel
-    const latT = m * this.ayF * p.hCG / p.track;            // per axle side-to-side
-    const latF = latT * p.rollStiffnessFront;
-    const latR = latT * (1 - p.rollStiffnessFront);
+    const stat = [statF, statF, statR, statR];
+
+    // corner deflections from heave/pitch/roll (+h = corner moved up)
+    const hC = [], hdC = [];
+    for (let i = 0; i < 4; i++) {
+      hC.push(this.zH - wx[i] * this.theta + wy[i] * this.phi);
+      hdC.push(this.vzH - wx[i] * this.dtheta + wy[i] * this.dphi);
+    }
+    const springF = (h, hd) => {
+      let F = -p.springRate * h - p.damping * hd;
+      if (h < -p.bumpTravel) F += -p.bumpRate * (h + p.bumpTravel); // bump stop
+      return F;
+    };
+    const S = [];
+    for (let i = 0; i < 4; i++) S.push(stat[i] + springF(hC[i], hdC[i]));
+    // anti-roll bars couple left/right corner deflections per axle
+    const arbF = p.arbFront * (hC[0] - hC[1]);
+    const arbR = p.arbRear * (hC[2] - hC[3]);
+    S[0] -= arbF; S[1] += arbF;
+    S[2] -= arbR; S[3] += arbR;
+    // geometric load transfer (through roll center / anti geometry, bypasses
+    // the springs; uses last step's tire forces - negligible lag at 5 kHz)
+    const geo = this._geo || { FyF: 0, FyR: 0, Fx: 0 };
+    const TgF = geo.FyF * p.hRollCenter / p.track;
+    const TgR = geo.FyR * p.hRollCenter / p.track;
+    const TgL = geo.Fx * p.hCG * p.antiPitch / (2 * L);
     const Fz = [
-      Math.max(0, statF - longT - latF + down / 4),
-      Math.max(0, statF - longT + latF + down / 4),
-      Math.max(0, statR + longT - latR + down / 4),
-      Math.max(0, statR + longT + latR + down / 4)
+      Math.max(0, S[0] - TgF - TgL),
+      Math.max(0, S[1] + TgF - TgL),
+      Math.max(0, S[2] - TgR + TgL),
+      Math.max(0, S[3] + TgR + TgL)
     ];
 
-    // --- Wheel rotational speeds (front spool + rear diff) ---
+    // --- Wheel rotational speeds (front spool or diff + rear diff) ---
+    const frontGear = p.frontDrive === 'gear';
     const wOmega = [
-      this.omegaDrive, this.omegaDrive,
+      this.omegaDrive + (frontGear ? this.deltaFront / 2 : 0),
+      this.omegaDrive - (frontGear ? this.deltaFront / 2 : 0),
       this.omegaDrive + this.deltaRear / 2,
       this.omegaDrive - this.deltaRear / 2
     ];
@@ -95,6 +126,7 @@ export class Car {
     // --- Per-wheel slip and forces ---
     let Fx = 0, Fy = 0, Mz = 0, driveReact = 0;
     const FxwArr = [0, 0, 0, 0], satArr = [0, 0, 0, 0];
+    const geoNext = { FyF: 0, FyR: 0, Fx: 0 };
     for (let i = 0; i < 4; i++) {
       // contact point velocity in body frame
       const vbx = this.vx - this.r * wy[i];
@@ -112,7 +144,10 @@ export class Car {
       // rolling resistance acts on the body, smooth around zero speed
       const Frr = -p.rollResist * Fz[i] * Math.tanh(vXw / 0.3);
 
-      const fxw = tf.Fx, fyw = tf.Fy;
+      // camber thrust: static camber (tops lean inward) + roll-induced lean
+      const gamma = (wy[i] > 0 ? -1 : 1) * p.staticCamber
+        - this.phi * (1 - p.camberComp);
+      const fxw = tf.Fx, fyw = tf.Fy + p.camberThrust * gamma * Fz[i];
       // back to body frame
       const fbx = c * fxw - s * fyw + Frr * c;
       const fby = s * fxw + c * fyw + Frr * s;
@@ -120,7 +155,10 @@ export class Car {
       Mz += wx[i] * fby - wy[i] * fbx;
       FxwArr[i] = fxw; satArr[i] = tf.sat;
       driveReact += fxw * rw;
+      if (i < 2) geoNext.FyF += fby; else geoNext.FyR += fby;
+      geoNext.Fx += fbx;
     }
+    this._geo = geoNext;
 
     // --- Aero drag opposing velocity ---
     if (v > 1e-3) {
@@ -153,9 +191,15 @@ export class Car {
     const Twheels = Tm * p.gearRatio;
     this.omegaDrive += dt * (Twheels - driveReact) / Idrive;
     if (this.omegaDrive < 0) this.omegaDrive = 0; // no reverse in racing
-    // rear diff: left/right speed difference driven by tire torque imbalance
+    // gear diffs: left/right speed difference driven by tire torque imbalance
     this.deltaRear += dt * (-(FxwArr[2] - FxwArr[3]) * rw - p.rearDiffDamping * this.deltaRear)
       / p.wheelInertia;
+    if (frontGear) {
+      this.deltaFront += dt * (-(FxwArr[0] - FxwArr[1]) * rw - p.rearDiffDamping * this.deltaFront)
+        / p.wheelInertia;
+    } else {
+      this.deltaFront = 0;
+    }
 
     // --- Body dynamics (body frame), then world integration ---
     const axRaw = Fx / m, ayRaw = Fy / m;
@@ -168,7 +212,25 @@ export class Car {
     this.y += dt * (this.vx * sy + this.vy * cy);
     this.yaw += dt * this.r;
 
-    // --- Suspension lag for load transfer ---
+    // --- Sprung-chassis dynamics: heave, roll, pitch ---
+    // suspension reaction on the body is -S (springs push body up = +S on wheel)
+    const Ssum = S[0] + S[1] + S[2] + S[3];
+    this.vzH += dt * (Ssum - m * G - down) / m;
+    this.zH += dt * this.vzH;
+    // roll: spring moments + lateral force couple about the roll axis
+    let tauX = 0, tauY = 0;
+    for (let i = 0; i < 4; i++) {
+      tauX += wy[i] * S[i];
+      tauY -= wx[i] * S[i];
+    }
+    tauX += Fy * (p.hCG - p.hRollCenter);
+    tauY -= Fx * p.hCG * (1 - p.antiPitch);
+    this.dphi += dt * tauX / p.Ixx;
+    this.phi += dt * this.dphi;
+    this.dtheta += dt * tauY / p.Iyy;
+    this.theta += dt * this.dtheta;
+
+    // --- Filtered accelerations (telemetry / driver feel) ---
     const k = dt / (p.suspTau + dt);
     this.axF += k * (axRaw - this.axF);
     this.ayF += k * (ayRaw - this.ayF);

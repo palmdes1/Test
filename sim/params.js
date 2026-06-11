@@ -17,9 +17,21 @@ export const TC_PARAMS = {
   hCG: 0.024,            // m, CG height above ground
   wheelRadius: 0.032,    // m (64 mm spec rubber tire)
 
-  // --- Suspension (quasi-static load transfer) ---
-  rollStiffnessFront: 0.52, // fraction of lateral load transfer taken by front axle
-  suspTau: 0.025,           // s, 1st-order lag of load transfer (springs/dampers)
+  // --- Suspension: sprung chassis with heave/pitch/roll DOF ---
+  Ixx: 0.0045,           // kg m^2 roll inertia
+  Iyy: 0.015,            // kg m^2 pitch inertia
+  springRate: 340,       // N/m wheel rate per corner (~5 Hz ride frequency)
+  damping: 15,           // N s/m per corner (~0.7 critical)
+  arbFront: 170,         // N/m anti-roll bar differential rate, front
+  arbRear: 120,          // N/m anti-roll bar differential rate, rear
+  bumpTravel: 0.004,     // m suspension travel to the bump stop
+  bumpRate: 4000,        // N/m additional rate past the bump stop
+  hRollCenter: 0.006,    // m roll-center height (low, typical TC)
+  antiPitch: 0.1,        // fraction of pitch moment reacted by geometry (anti-dive/squat)
+  staticCamber: 0.026,   // rad (~1.5 deg negative camber both ends)
+  camberComp: 0.5,       // fraction of body roll compensated by camber gain
+  camberThrust: 0.8,     // lateral force per rad camber per N load
+  suspTau: 0.025,        // s, filter for telemetry accelerations
 
   // --- Tires (Pacejka magic formula, per wheel) ---
   tire: {
@@ -40,7 +52,8 @@ export const TC_PARAMS = {
   steerRate: 9.0,        // rad/s slew at the wheel (low-profile servo, ~0.06 s/60deg)
   ackermann: 1.0,        // 1 = full geometric Ackermann
 
-  // --- Drivetrain: belt 4WD, front spool + rear gear diff ---
+  // --- Drivetrain: belt 4WD, front spool or gear diff + rear gear diff ---
+  frontDrive: 'spool',   // 'spool' | 'gear'
   gearRatio: 4.0,        // final drive ratio (spur/pinion * internal)
   drivetrainEff: 0.85,
   wheelInertia: 2.2e-5,  // kg m^2 per wheel+axle

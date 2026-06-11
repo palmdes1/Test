@@ -81,7 +81,13 @@ function shade(color, pts) {
 export function buildCarPolys(p, car) {
   const hl = p.halfLength, hw = p.halfWidth, rw = p.wheelRadius, a = p.a, tw = p.track / 2;
   const cy = Math.cos(car.yaw), sy = Math.sin(car.yaw);
-  const tr = (lx, ly, lz) => [car.x + lx * cy - ly * sy, car.y + lx * sy + ly * cy, lz];
+  const roll = car.phi || 0, pitch = car.theta || 0;
+  let tiltBody = false; // shell tilts with chassis, wheels stay on the ground
+  const tr = (lx, ly, lz) => [
+    car.x + lx * cy - ly * sy,
+    car.y + lx * sy + ly * cy,
+    lz + (tiltBody ? ly * roll - lx * pitch : 0)
+  ];
   const polys = [];
   const box = (x0, x1, y0, y1, z0, z1, color) => {
     const c = [
@@ -91,10 +97,12 @@ export function buildCarPolys(p, car) {
       polys.push({ pts: fc.map(i => tr(...c[i])), color });
     }
   };
+  tiltBody = true;
   box(-hl, hl, -hw, hw, 0.012, 0.052, [235, 90, 30]);
   box(-hl * 0.55, hl * 0.45, -hw * 0.78, hw * 0.78, 0.052, 0.105, [40, 60, 85]);
   box(-hl * 0.5, hl * 0.4, -hw * 0.25, hw * 0.25, 0.105, 0.108, [250, 250, 250]);
   box(-hl - 0.005, -hl + 0.035, -hw * 0.85, hw * 0.85, 0.085, 0.095, [235, 90, 30]);
+  tiltBody = false;
   // wheels (hex prisms)
   const wheels = [[a, tw, car.steer], [a, -tw, car.steer], [-a, tw, 0], [-a, -tw, 0]];
   for (const [wxp, wyp, st] of wheels) {

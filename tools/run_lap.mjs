@@ -35,6 +35,7 @@ while (world.lap < lapsWanted + 1 && t < tMax) {
     v: +car.speed.toFixed(3),
     thr: +car.throttle.toFixed(3), brk: +car.brake.toFixed(3),
     lap: world.lap, lapT: +world.currentLapTime.toFixed(3),
+    roll: +car.phi.toFixed(4), pitch: +car.theta.toFixed(4),
     ay: +car.ayF.toFixed(2), ax: +car.axF.toFixed(2),
     wspd: +(car.omegaDrive * car.p.wheelRadius).toFixed(2)
   });
