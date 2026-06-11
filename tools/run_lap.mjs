@@ -9,6 +9,7 @@ import { TC_PARAMS, TC_PARAMS_MOD } from '../sim/params.js';
 import { buildTrack, trackGeometry } from '../sim/track.js';
 import { Driver } from '../sim/driver.js';
 import { World } from '../sim/world.js';
+import { makeSurface } from '../sim/surface.js';
 
 const trackName = process.argv[2] || 'oval';
 const lapsWanted = parseInt(process.argv[3] || '2', 10);
@@ -17,15 +18,17 @@ const outFile = process.argv[4] || `out/${trackName}_telemetry.json`;
 
 const PARAMS = motorClass === 'mod' ? TC_PARAMS_MOD : TC_PARAMS;
 const driverOpts = motorClass === 'mod'
-  ? { speed: { ayMax: 21, axBrake: 16, axAccel: 14, vTop: 32 } }
-  : {};
+  ? { speed: { ayMax: 22, axBrake: 17, axAccel: 15, vTop: 32 }, kp: 1.1 }
+  : { speed: { ayMax: 21, axBrake: 15, axAccel: 12, vTop: 19 }, kp: 1.1 };
 
 const track = buildTrack(trackName);
 const car = new Car(PARAMS);
 const world = new World(track, car);
 const driver = new Driver(track, car, driverOpts);
+car.surfaceFn = makeSurface(track, driver.line);
 world.placeAtStart(1.0);
 console.log(`Car: ${PARAMS.name}`);
+console.log(`Ideal lap (quasi-steady-state optimum): ${driver.idealLap.toFixed(3)} s`);
 
 const FPS = 60;
 const frames = [];
@@ -43,6 +46,9 @@ while (world.lap < lapsWanted + 1 && t < tMax) {
     thr: +car.throttle.toFixed(3), brk: +car.brake.toFixed(3),
     lap: world.lap, lapT: +world.currentLapTime.toFixed(3),
     roll: +car.phi.toFixed(4), pitch: +car.theta.toFixed(4),
+    yawRate: +car.r.toFixed(3),
+    shock: car.tel.shock.map(s => +s.toFixed(2)),
+    tT: car.tireT.map(t => +t.toFixed(1)),
     ay: +car.ayF.toFixed(2), ax: +car.axF.toFixed(2),
     wspd: +(car.omegaDrive * car.p.wheelRadius).toFixed(2)
   });
@@ -82,6 +88,7 @@ writeFileSync(outFile, JSON.stringify({
   },
   fps: FPS,
   carName: PARAMS.name,
+  idealLap: +driver.idealLap.toFixed(3),
   lapTimes: world.lapTimes,
   frames
 }));

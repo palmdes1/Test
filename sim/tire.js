@@ -14,11 +14,11 @@ function magic(x, B, C, E) {
  * @param {object} p      tire parameter block (see params.js)
  * @returns {{Fx:number, Fy:number, sat:number}} forces, and slip saturation (0..1+)
  */
-export function tireForces(Fz, kappa, alpha, p) {
+export function tireForces(Fz, kappa, alpha, p, gripScale = 1) {
   if (Fz <= 0) return { Fx: 0, Fy: 0, sat: 0 };
 
   // Load-sensitive peak friction: mu falls off as load rises above nominal.
-  const mu = p.mu0 * (1 - p.loadSens * (Fz - p.Fz0) / p.Fz0);
+  const mu = p.mu0 * (1 - p.loadSens * (Fz - p.Fz0) / p.Fz0) * gripScale;
   const D = Math.max(mu, 0.3) * Fz;
 
   // Normalize slips by their respective peak-slip values and combine.

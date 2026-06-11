@@ -96,11 +96,30 @@ class GroundTexture:
                         edge(i + 2, side * (hw + 0.55)), edge(i, side * (hw + 0.55))]
                 draw.polygon([px(q) for q in quad], fill=(110, 118, 88))
 
-        # --- asphalt ---
+        # --- asphalt (also build a mask for wear/blotch overlay) ---
+        mask = Image.new("L", self.size, 0)
+        mdraw = ImageDraw.Draw(mask)
         for i in range(0, n, 2):
             quad = [edge(i, hw + 0.05), edge(i + 2, hw + 0.05),
                     edge(i + 2, -hw - 0.05), edge(i, -hw - 0.05)]
-            draw.polygon([px(q) for q in quad], fill=(72, 72, 76))
+            qq = [px(q) for q in quad]
+            draw.polygon(qq, fill=(72, 72, 76))
+            mdraw.polygon(qq, fill=255)
+        self._track_mask = mask
+
+        # --- repair patches: rectangles of slightly different asphalt ---
+        prng = np.random.default_rng(23)
+        for _ in range(26):
+            i = int(prng.integers(0, n))
+            off = float(prng.uniform(-hw * 0.6, hw * 0.6))
+            ln = float(prng.uniform(0.8, 3.0))
+            wd = float(prng.uniform(0.5, 1.4))
+            shade_c = int(prng.integers(-9, 10))
+            col = (72 + shade_c, 72 + shade_c, 76 + shade_c)
+            j = (i + max(2, int(ln / 0.45))) % n
+            quad = [edge(i, off - wd / 2), edge(j, off - wd / 2),
+                    edge(j, off + wd / 2), edge(i, off + wd / 2)]
+            draw.polygon([px(q) for q in quad], fill=col)
 
         # --- painted curbs on corner insides ---
         curv = np.zeros(n)
@@ -151,8 +170,26 @@ class GroundTexture:
                 col = (235, 235, 235) if (kcell + mrow) % 2 == 0 else (28, 28, 28)
                 draw.polygon([px(q) for q in quad], fill=col)
 
-        # --- asphalt grain noise over everything inside the track mask ---
+        # --- braking streaks (dark tire marks where the AI brakes hard) ---
+        frames = data.get("frames", [])
+        for k in range(0, len(frames), 3):
+            fr = frames[k]
+            if fr.get("lap", 0) >= 1 and fr.get("brk", 0) > 0.55:
+                cyaw, syaw = math.cos(fr["yaw"]), math.sin(fr["yaw"])
+                for sgn in (-1, 1):
+                    ox, oy = -syaw * sgn * 0.078, cyaw * sgn * 0.078
+                    p0 = px((fr["x"] + ox, fr["y"] + oy))
+                    p1 = px((fr["x"] + ox + cyaw * 0.55, fr["y"] + oy + syaw * 0.55))
+                    draw.line([p0, p1], fill=(34, 34, 38), width=max(1, int(0.05 * ppm)))
+
+        # --- wear blotches inside the track mask + global grain ---
         arr = np.asarray(img).astype(np.int16)
+        wear = rng.normal(0, 14, (th // 18 + 1, tw // 18 + 1))
+        wear = np.array(Image.fromarray(
+            np.clip(wear + 128, 0, 255).astype(np.uint8)
+        ).resize((tw, th), Image.BILINEAR), np.int16) - 128
+        m = (np.asarray(self._track_mask, np.int16) // 255)
+        arr += (wear * m)[:, :, None] // 2
         grain = rng.normal(0, 5, (th, tw, 1)).astype(np.int16)
         arr = np.clip(arr + grain, 0, 255).astype(np.uint8)
         self.tex = Image.fromarray(arr)
@@ -276,6 +313,43 @@ def build_car_polys(cardef, fr):
                 lx, ly, lz = cx_, side * 0.013, cz + rw
                 quad.append((wx + lx * cs - ly * sn, wy_ + lx * sn + ly * cs, lz))
             polys.append((tr(quad), (15, 15, 17)))
+    return polys
+
+
+def build_hood_polys(cardef, fr):
+    """Front bodywork + front wheels as seen from the cockpit. The hood is
+    drawn without roll/pitch: camera and shell share the chassis frame, so
+    the hood stays fixed in view while the world tilts."""
+    x, y, yaw, steer = fr["x"], fr["y"], fr["yaw"], fr["steer"]
+    hl, hw = cardef["halfLength"], cardef["halfWidth"]
+    rw = cardef["wheelRadius"]
+    a = cardef["a"]
+    tw = cardef["track"] / 2
+    cy, sy = math.cos(yaw), math.sin(yaw)
+
+    def tr(pts):
+        return np.array([(x + px_ * cy - py_ * sy, y + px_ * sy + py_ * cy, pz)
+                         for px_, py_, pz in pts])
+
+    polys = []
+
+    def box(x0, x1, y0, y1, z0, z1, color):
+        c = [(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0),
+             (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)]
+        for fc in [(0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7), (4, 5, 6, 7)]:
+            polys.append((tr([c[i] for i in fc]), color))
+
+    box(0.02, hl, -hw, hw, 0.012, 0.052, (235, 90, 30))      # hood
+    box(hl - 0.03, hl, -hw, hw, 0.052, 0.058, (210, 78, 24)) # nose lip
+    for wy_ in (tw, -tw):  # front wheels (steered)
+        cs, sn = math.cos(steer), math.sin(steer)
+        ring = [(rw * math.cos(math.pi / 3 * i), rw * math.sin(math.pi / 3 * i)) for i in range(6)]
+        for side in (-1, 1):
+            pts = []
+            for cx_, cz in ring:
+                lx, ly, lz = cx_, side * 0.013, cz + rw
+                pts.append((a + lx * cs - ly * sn, wy_ + lx * sn + ly * cs, lz))
+            polys.append((tr(pts), (25, 26, 30)))
     return polys
 
 
@@ -404,6 +478,8 @@ def render(telemetry_path, out_path, max_laps=None):
                                 quality=8, pixelformat="yuv420p", macro_block_size=8)
     best = None
     lap_times = data["lapTimes"]
+    hist = []
+    HIST_N = 240  # 4 s of strip-chart history
     for fi, fr in enumerate(frames):
         cam.update((fr["x"], fr["y"]), 1.0 / fps_in)
         B = cam.basis()
@@ -413,37 +489,87 @@ def render(telemetry_path, out_path, max_laps=None):
         solids = statics + shadow + carpolys
         img = render_view(B, ground, solids, sky, W, H)
 
-        # ---- onboard PIP (roof cam) ----
+        # ---- in-car PIP (cockpit cam: hood fixed in view, world rolls) ----
         yaw, roll, pitch = fr["yaw"], fr.get("roll", 0.0), fr.get("pitch", 0.0)
         dyaw = (math.cos(yaw), math.sin(yaw))
-        eye = (fr["x"] + dyaw[0] * 0.02, fr["y"] + dyaw[1] * 0.02, 0.13)
-        look = (eye[0] + dyaw[0] * 6, eye[1] + dyaw[1] * 6, 0.13 - 0.05 - pitch * 3.0)
-        pipB = CameraBasis(eye, look, math.radians(68), PIP_W, PIP_H, up_roll=-roll)
-        pip = render_view(pipB, ground, statics, sky, PIP_W, PIP_H)
+        eye = (fr["x"] - dyaw[0] * 0.03, fr["y"] - dyaw[1] * 0.03, 0.092)
+        look = (eye[0] + dyaw[0] * 5, eye[1] + dyaw[1] * 5,
+                0.092 - 0.042 - pitch * 2.5)
+        pipB = CameraBasis(eye, look, math.radians(74), PIP_W, PIP_H, up_roll=-roll)
+        hood = [(p, c, True) for p, c in build_hood_polys(data["car"], fr)]
+        pip = render_view(pipB, ground, statics + hood, sky, PIP_W, PIP_H)
         pd = ImageDraw.Draw(pip)
         pd.rectangle([0, 0, PIP_W - 1, PIP_H - 1], outline=(20, 22, 28), width=3)
-        pd.text((10, PIP_H - 26), "ONBOARD", font=F_SML, fill=(255, 255, 255))
+        pd.text((10, PIP_H - 26), "IN-CAR", font=F_SML, fill=(255, 255, 255))
         img.paste(pip, (W - PIP_W - 16, 16))
 
-        # ---- HUD ----
         draw = ImageDraw.Draw(img, "RGBA")
+
+        # ---- live telemetry strip charts (chassis + shocks) ----
+        hist.append((fr.get("roll", 0) * 57.3, fr.get("pitch", 0) * 57.3,
+                     fr.get("yawRate", 0), fr.get("shock", [0, 0, 0, 0])))
+        if len(hist) > HIST_N:
+            hist.pop(0)
+        cw, chh = PIP_W, 92
+        cx0, cy0_ = W - cw - 16, 16 + PIP_H + 10
+        draw.rectangle([cx0, cy0_, cx0 + cw, cy0_ + chh], fill=(10, 12, 17, 245))
+        draw.rectangle([cx0, cy0_ + chh + 8, cx0 + cw, cy0_ + 2 * chh + 8], fill=(10, 12, 17, 245))
+
+        def plot(panel_y, series, scales, colors, labels):
+            mid = panel_y + chh / 2
+            draw.line([cx0 + 4, mid, cx0 + cw - 4, mid], fill=(60, 64, 74))
+            npts = len(hist)
+            for si, (sel, sc, col) in enumerate(zip(series, scales, colors)):
+                pts = []
+                for k in range(npts):
+                    val = sel(hist[k])
+                    xx = cx0 + 4 + (cw - 8) * k / (HIST_N - 1)
+                    yy = mid - max(-1, min(1, val / sc)) * (chh / 2 - 8)
+                    pts.append((xx, yy))
+                if len(pts) > 1:
+                    draw.line(pts, fill=col, width=1)
+            for si, (lab, col) in enumerate(zip(labels, colors)):
+                draw.text((cx0 + 8 + si * 78, panel_y + 3), lab, font=F_SML, fill=col)
+
+        plot(cy0_,
+             [lambda h: h[0], lambda h: h[1], lambda h: h[2]],
+             [4.0, 2.5, 6.0],
+             [(120, 180, 255), (255, 170, 90), (130, 235, 140)],
+             ["roll", "pitch", "yaw rate"])
+        plot(cy0_ + chh + 8,
+             [lambda h: h[3][0], lambda h: h[3][1], lambda h: h[3][2], lambda h: h[3][3]],
+             [6, 6, 6, 6],
+             [(235, 235, 235), (250, 220, 90), (110, 220, 235), (235, 130, 200)],
+             ["FL", "FR", "RL", "RR"])
+        draw.text((cx0 + cw - 88, cy0_ + chh + 11), "shocks mm", font=F_SML, fill=(150, 158, 170))
+
+        # ---- HUD ----
         lap = fr["lap"]
         if lap >= 2 and len(lap_times) >= lap - 1:
             best = min(lap_times[: lap - 1])
-        draw.rectangle([20, 20, 320, 132], fill=(12, 14, 20, 215))
+        draw.rectangle([20, 20, 372, 132], fill=(12, 14, 20, 215))
         draw.text((34, 28), "OUT LAP" if lap == 0 else f"LAP {lap}", font=F_MED, fill=(255, 255, 255))
         draw.text((34, 56), f"{fr['lapT']:6.2f}", font=F_BIG, fill=(120, 255, 140))
         if best:
             draw.text((34, 100), f"BEST {best:5.2f}", font=F_SML, fill=(255, 215, 120))
         last = lap_times[lap - 2] if lap >= 2 and len(lap_times) >= lap - 1 else None
         if last:
-            draw.text((170, 100), f"LAST {last:5.2f}", font=F_SML, fill=(180, 200, 255))
+            draw.text((140, 100), f"LAST {last:5.2f}", font=F_SML, fill=(180, 200, 255))
+        ideal = data.get("idealLap")
+        if ideal:
+            draw.text((240, 100), f"IDEAL {ideal:5.2f}", font=F_SML, fill=(160, 255, 230))
 
         kmh = fr["v"] * 3.6
         draw.rectangle([20, H - 120, 320, H - 20], fill=(12, 14, 20, 215))
         draw.text((34, H - 112), f"{kmh:5.1f} km/h", font=F_BIG, fill=(255, 255, 255))
         gtxt = f"lat {fr.get('ay', 0)/9.81:+.1f}g  lon {fr.get('ax', 0)/9.81:+.1f}g"
         draw.text((34, H - 70), gtxt, font=F_SML, fill=(160, 170, 185))
+        tT = fr.get("tT")
+        if tT:
+            for ti, tv in enumerate(tT):
+                col = (110, 170, 255) if tv < 42 else (120, 230, 130) if tv < 58 else (240, 110, 90)
+                draw.text((175 + ti * 36, H - 70), f"{tv:.0f}°", font=F_SML, fill=col)
+            draw.text((175, H - 88), "tires FL FR RL RR", font=F_SML, fill=(120, 128, 140))
         bx = 34
         draw.rectangle([bx, H - 44, bx + 200, H - 34], outline=(90, 95, 105))
         draw.rectangle([bx, H - 44, bx + int(200 * fr["thr"]), H - 34], fill=(70, 220, 90))

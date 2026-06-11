@@ -20,10 +20,10 @@ export const TC_PARAMS = {
   // --- Suspension: sprung chassis with heave/pitch/roll DOF ---
   Ixx: 0.0045,           // kg m^2 roll inertia
   Iyy: 0.015,            // kg m^2 pitch inertia
-  springRate: 340,       // N/m wheel rate per corner (~5 Hz ride frequency)
-  damping: 15,           // N s/m per corner (~0.7 critical)
-  arbFront: 170,         // N/m anti-roll bar differential rate, front
-  arbRear: 120,          // N/m anti-roll bar differential rate, rear
+  springRate: 270,       // N/m wheel rate per corner (~4.5 Hz, outdoor asphalt setup)
+  damping: 13,           // N s/m per corner (~0.7 critical)
+  arbFront: 150,         // N/m anti-roll bar differential rate, front
+  arbRear: 105,          // N/m anti-roll bar differential rate, rear
   bumpTravel: 0.004,     // m suspension travel to the bump stop
   bumpRate: 4000,        // N/m additional rate past the bump stop
   hRollCenter: 0.006,    // m roll-center height (low, typical TC)
@@ -44,7 +44,15 @@ export const TC_PARAMS = {
     // Longitudinal: peak at ~12% slip ratio
     Bx: 17.3, Cx: 1.4, Ex: -0.5,
     kappaPeak: 0.12,
-    relaxLen: 0.03       // m, slip relaxation length (low-speed smoothing)
+    relaxLen: 0.03,      // m, slip relaxation length (low-speed smoothing)
+    // thermal model: traction-compound rubber has a grip window
+    T0: 34,              // deg C, starting temp (compound applied, sun)
+    Tamb: 26,            // deg C ambient/track
+    Topt: 52,            // deg C peak-grip temperature
+    tempSens: 0.00016,   // grip loss per (deg C)^2 from optimum
+    heatCap: 15,         // J/K effective tread surface thermal mass
+    cool: 0.010,         // 1/s convective cooling (tires cool over ~minutes)
+    coolV: 0.0009        // extra cooling per m/s
   },
 
   // --- Steering ---

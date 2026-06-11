@@ -9,12 +9,14 @@ import { Car } from '../sim/car.js';
 import { TC_PARAMS, TC_PARAMS_MOD } from '../sim/params.js';
 
 const DT = 1 / 5000;
+const warm = c => { c.tireT = [52, 52, 52, 52]; };
 
 console.log(`Validating: ${TC_PARAMS.name}\n`);
 
 // --- 1. Standing start: 0-10 m, 0-30 m, top speed ---
 {
   const car = new Car(TC_PARAMS);
+  warm(car);
   let t = 0, t10 = null, t30 = null, vmax = 0;
   while (t < 8) {
     car.setControls(0, 1, 0);
@@ -30,6 +32,7 @@ console.log(`Validating: ${TC_PARAMS.name}\n`);
 // --- 2. Launch acceleration (peak ax over first 0.5 s) ---
 {
   const car = new Car(TC_PARAMS);
+  warm(car);
   let t = 0, axMax = 0;
   while (t < 0.5) {
     car.setControls(0, 1, 0);
@@ -42,6 +45,7 @@ console.log(`Validating: ${TC_PARAMS.name}\n`);
 // --- 3. Braking from 15 m/s ---
 {
   const car = new Car(TC_PARAMS);
+  warm(car);
   car.vx = 15; car.omegaDrive = 15 / TC_PARAMS.wheelRadius;
   const x0 = car.x;
   let t = 0, axMin = 0;
@@ -57,6 +61,7 @@ console.log(`Validating: ${TC_PARAMS.name}\n`);
 {
   for (const v of [6, 8, 10]) {
     const car = new Car(TC_PARAMS);
+    warm(car);
     car.vx = v; car.omegaDrive = v / TC_PARAMS.wheelRadius;
     let t = 0, ayMax = 0, rollMax = 0, spun = false;
     while (t < 6 && !spun) {
@@ -78,6 +83,7 @@ console.log(`Validating: ${TC_PARAMS.name}\n`);
 // --- 5. Step steer response at 10 m/s (yaw stability / transient) ---
 {
   const car = new Car(TC_PARAMS);
+  warm(car);
   car.vx = 10; car.omegaDrive = 10 / TC_PARAMS.wheelRadius;
   let t = 0, rPeak = 0, rEnd = 0;
   while (t < 1.5) {
@@ -93,6 +99,7 @@ console.log(`Validating: ${TC_PARAMS.name}\n`);
 {
   console.log(`\nValidating: ${TC_PARAMS_MOD.name}\n`);
   const car = new Car(TC_PARAMS_MOD);
+  warm(car);
   let t = 0, t30 = null, vmax = 0, axMax = 0;
   while (t < 10) {
     car.setControls(0, 1, 0);

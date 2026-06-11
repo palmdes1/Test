@@ -65,9 +65,15 @@ web/      canvas software-3D renderer + game loop
 tools/    validation, headless lap runner, MP4 renderer
 ```
 
-## Results (AI laps)
+## Results (pro AI laps vs ideal)
 
-- Oval (75.4 m, 3.5 m lane), 13.5T: best lap **5.68 s**, top speed 67 km/h
-- Figure-8 (79.2 m, 3 m lane), 13.5T: best lap **6.60 s**, top speed 62 km/h
-- Luxembourg (249.3 m, 4 m lane), 5.5T mod: best lap **16.67 s**,
-  102 km/h on the main straight, 2.1 g sustained in the sweepers
+| Track | Car | Ideal (QSS optimum) | Best AI lap | Gap |
+|---|---|---|---|---|
+| Oval 75.4 m | 13.5T | 5.30 s | 5.61 s | 0.31 s |
+| Luxembourg 249.3 m | 5.5T mod | 16.59 s | 16.94 s | 0.35 s |
+
+Luxembourg: 102 km/h on the straight, ~2.2 g in the sweepers, lap times build
+17.79 → 16.94 s as tire temps climb from 34 °C to the upper 40s.
+`tools/telemetry_sheet.py` renders an engineering sheet (speed/pedals,
+steering/yaw rate, roll/pitch, shock travel, tire temps, g-g diagram) for
+model validation.

@@ -83,6 +83,28 @@ No drag brake (blinky coast is free).
 Servo slew-rate limit (~0.06 s/60°) and geometric **Ackermann** — inner
 wheel steers more, computed per wheel from the turn-center geometry.
 
+## Tire temperatures
+
+Each tread has a thermal state: heating from slip power (|F·v_slip| at the
+contact patch) plus rolling hysteresis, first-order convective cooling
+(time constant ~minutes, faster with airspeed). Grip follows a quadratic
+window around the optimum compound temperature (52 °C): tires start at 34 °C
+roughly 5 % down, reach the mid-40s within 2–3 laps. The AI driver scales its
+commitment with tire temperature, so lap times build over a run exactly like
+a real qualifying stint.
+
+## Surface model
+
+Grip is a function of position, not a constant (`sim/surface.js`):
+
+- ±4.5 % patchy asphalt variation (deterministic value noise)
+- +5 % on the rubbered-in groove (Gaussian falloff around the racing line)
+- −7 % dust/marbles offline (beyond ~1 m from the groove)
+- road **roughness**: two-octave height noise (±1–2 mm at 0.7 m and 3 m
+  wavelengths) fed into the suspension as per-wheel road displacement — this
+  is what makes the shocks live on the straights and the car feel like it's
+  on real asphalt rather than glass.
+
 ## Aerodynamics
 
 Small but included: `F = C·v²` drag and downforce for a 190 mm TC shell
@@ -111,10 +133,25 @@ ESC braking into the turn with slight rotation as load transfers forward,
 apex speed pinned by the lateral-g limit, and progressive throttle from apex
 so the combined-slip budget isn't exceeded.
 
+## AI driver and the ideal lap
+
+The driver pre-computes a corridor-constrained racing line and a
+curvature-limited speed profile (backward braking pass + forward traction
+pass). Integrating `ds/v` over that profile gives the **quasi-steady-state
+ideal lap** — the theoretical optimum for the setup, reported by the lap
+runner and shown in the video HUD. Driving uses pure-pursuit steering,
+anticipatory braking (scanning ahead for required decel, like a real braking
+point), drag-feedforward throttle, and tire-temperature-scaled commitment.
+
+Result on the Luxembourg layout (5.5T): laps 17.79 → 17.19 → 17.02 → 16.95 →
+**16.94 s** against an ideal of **16.59 s** — within 0.35 s of the model's
+theoretical optimum, with zero board contact.
+
 ## Known simplifications (next steps)
 
-- No unsprung-mass DOF (wheels follow the ground; no kerb/bump excitation yet).
-- No tire temperature/additive model, no carpet fiber directionality.
-- Single surface μ; no dust/groove evolution (the groove is cosmetic).
+- No unsprung-mass DOF (road roughness excites the suspension, but wheels
+  have no independent vertical dynamics; no kerb-jump physics yet).
+- Grip/roughness fields are static — no session-long groove build-up or
+  dust migration.
 - No one-way front diff or adjustable diff preload yet.
 - Setup (springs, ARBs, camber, diff) is parameter-file only — no in-game UI.

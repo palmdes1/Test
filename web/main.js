@@ -5,6 +5,7 @@ import { TC_PARAMS, TC_PARAMS_MOD } from '../sim/params.js';
 import { buildTrack, trackGeometry } from '../sim/track.js';
 import { Driver, computeRacingLine } from '../sim/driver.js';
 import { World } from '../sim/world.js';
+import { makeSurface } from '../sim/surface.js';
 import { StandCamera, drawScene, prepareGeometry, buildCarPolys, centroid } from './render.js';
 
 const canvas = document.getElementById('view');
@@ -42,9 +43,11 @@ function setTrack(name) {
   params = motorClass === 'mod' ? TC_PARAMS_MOD : TC_PARAMS;
   car = new Car(params);
   const opts = motorClass === 'mod'
-    ? { speed: { ayMax: 21, axBrake: 16, axAccel: 14, vTop: 32 } } : {};
+    ? { speed: { ayMax: 22, axBrake: 17, axAccel: 15, vTop: 32 }, kp: 1.1 }
+    : { speed: { ayMax: 21, axBrake: 15, axAccel: 12, vTop: 19 }, kp: 1.1 };
   world = new World(track, car);
   driver = new Driver(track, car, opts);
+  car.surfaceFn = makeSurface(track, driver.line);
   world.placeAtStart(1.0);
   camera = new StandCamera(track.stand);
   scenery = prepareGeometry([...trackGeometry(track), ...grooveDecals(track)]);

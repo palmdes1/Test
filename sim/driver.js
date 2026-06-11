@@ -8,7 +8,7 @@ function wrap(i, n) { return ((i % n) + n) % n; }
  * each point within the lane corridor (elastic-band method). Points stay pinned
  * to the centerline normals so spacing is preserved.
  */
-export function computeRacingLine(track, { margin = 0.45, iterations = 800, lambda = 0.22 } = {}) {
+export function computeRacingLine(track, { margin = 0.32, iterations = 1400, lambda = 0.22 } = {}) {
   const n = track.pts.length;
   const maxOff = Math.max(0.1, track.halfWidth - margin);
   const off = new Float64Array(n); // lateral offset along normal
@@ -85,12 +85,30 @@ export function computeSpeedProfile(line, { ayMax = 19.5, axBrake = 13.5, axAcce
   return v;
 }
 
+/** Quasi-steady-state optimal lap time for a speed profile (the "ideal lap"). */
+export function profileLapTime(line, v) {
+  let t = 0;
+  for (let i = 0; i < line.n; i++) {
+    const j = wrap(i + 1, line.n);
+    const ds = Math.hypot(line.px[j] - line.px[i], line.py[j] - line.py[i]);
+    t += ds / Math.max(v[i], 0.5);
+  }
+  return t;
+}
+
 export class Driver {
   constructor(track, car, opts = {}) {
     this.track = track;
     this.car = car;
     this.line = computeRacingLine(track, opts.line);
-    this.vProfile = computeSpeedProfile(this.line, opts.speed);
+    this.speedOpts = opts.speed || {};
+    this.vProfile = computeSpeedProfile(this.line, this.speedOpts);
+    this.idealLap = profileLapTime(this.line, this.vProfile);
+    this.vTop = this.speedOpts.vTop ?? 18.5;
+    this.corrGain = opts.corrGain ?? 0;
+    this.laBase = opts.laBase ?? 0.45;
+    this.laGain = opts.laGain ?? 0.28;
+    this.kp = opts.kp ?? 0.7;
     this.idx = 0;
     this.wheelbase = car.p.wheelbase;
     this.maxSteer = car.p.maxSteer;
@@ -117,7 +135,7 @@ export class Driver {
     const v = car.speed;
 
     // --- pure pursuit steering ---
-    const Ld = 0.45 + 0.28 * v;
+    const Ld = this.laBase + this.laGain * v;
     let li = i0, acc = 0;
     while (acc < Ld) {
       const j = wrap(li + 1, n);
@@ -131,18 +149,51 @@ export class Driver {
     const ly = -sy * dx + cy * dy;
     const dist = Math.hypot(lx, ly);
     const kappaPP = (2 * ly) / Math.max(dist * dist, 0.01);
-    const steerAngle = Math.atan(kappaPP * this.wheelbase) * 1.12; // slight slip-angle compensation
+    // cross-track error correction (pro drivers hold the line tightly)
+    const ip = wrap(i0 - 1, n), inx = wrap(i0 + 1, n);
+    let tx = px[inx] - px[ip], ty = py[inx] - py[ip];
+    const tl = Math.hypot(tx, ty) || 1;
+    const eLat = ((car.x - px[i0]) * -ty + (car.y - py[i0]) * tx) / tl;
+    // correction as curvature (speed-invariant), not steering angle
+    const kCorr = Math.max(-0.05, Math.min(0.05, -this.corrGain * eLat));
+    const steerAngle = Math.atan((kappaPP + kCorr) * this.wheelbase) * 1.12;
     const steerCmd = steerAngle / this.maxSteer;
 
     // --- speed control: target a bit ahead of current position ---
+    // scale targets by current tire temperature (build pace as tires come in)
+    const tp = car.p.tire;
+    const Tm = (car.tireT[0] + car.tireT[1] + car.tireT[2] + car.tireT[3]) / 4;
+    const dTt = Tm - tp.Topt;
+    const tempF = Math.max(0.72, 1 - tp.tempSens * dTt * dTt);
+    const gScale = Math.sqrt(tempF) * 0.995;
     const ahead = wrap(i0 + Math.max(2, Math.round(v * 0.08 / 0.15)), n);
-    const vT = this.vProfile[ahead];
+    const vT = Math.min(this.vProfile[ahead] * gScale, this.speedOpts.vTop ?? 18.5);
     const e = vT - v;
+
+    // anticipatory braking: scan ahead and find the decel needed to make
+    // every upcoming profile speed (pro braking points, not reactive)
+    const axB = this.speedOpts.axBrake ?? 13.5;
+    let needBrake = 0, s = 0, li2 = i0;
+    const horizon = Math.max(10, v * v / (2 * axB * 0.7));
+    while (s < horizon) {
+      const j = wrap(li2 + 1, n);
+      s += Math.hypot(px[j] - px[li2], py[j] - py[li2]);
+      li2 = j;
+      const vk = this.vProfile[li2] * gScale;
+      if (vk < v && s > 0.3) {
+        needBrake = Math.max(needBrake, (v * v - vk * vk) / (2 * s));
+      }
+      if (li2 === i0) break;
+    }
+
     let throttle = 0, brake = 0;
-    if (e >= -0.4) {
-      throttle = Math.min(1, Math.max(0, 0.55 * e + vT / 19.5));
+    if (needBrake > 0.88 * axB) {
+      brake = Math.min(1, 0.25 + (needBrake - 0.88 * axB) / (0.30 * axB));
+    } else if (e >= -0.4) {
+      // feedforward holds speed against drag, P-term tracks the profile
+      throttle = Math.min(1, Math.max(0, this.kp * e + vT / (this.vTop * 1.06)));
     } else {
-      brake = Math.min(1, -0.5 * (e + 0.4));
+      brake = Math.min(1, -0.55 * (e + 0.4));
     }
 
     car.setControls(steerCmd, throttle, brake);

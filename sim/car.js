@@ -37,6 +37,9 @@ export class Car {
     this.theta = 0; this.dtheta = 0;             // pitch (+ = nose down)
     this.axF = 0; this.ayF = 0;                  // filtered specific force (telemetry)
     this._geo = null;
+    this.tireT = [this.p.tire.T0, this.p.tire.T0, this.p.tire.T0, this.p.tire.T0];
+    this._lastRoad = [0, 0, 0, 0];
+    this.surfaceFn = this.surfaceFn || null;     // (x,y) -> {grip, height}, set by world
     // inputs
     this.steerCmd = 0; this.throttle = 0; this.brake = 0;
     // telemetry
@@ -77,6 +80,22 @@ export class Car {
     const wx = [p.a, p.a, -p.b, -p.b];
     const wy = [t2, -t2, t2, -t2];
 
+    // --- Surface under each wheel: grip multiplier + road height ---
+    const cy0 = Math.cos(this.yaw), sy0 = Math.sin(this.yaw);
+    const road = [0, 0, 0, 0], roadRate = [0, 0, 0, 0], gripW = [1, 1, 1, 1];
+    for (let i = 0; i < 4; i++) {
+      if (this.surfaceFn) {
+        const s = this.surfaceFn(
+          this.x + wx[i] * cy0 - wy[i] * sy0,
+          this.y + wx[i] * sy0 + wy[i] * cy0
+        );
+        road[i] = s.height;
+        gripW[i] = s.grip;
+      }
+      roadRate[i] = Math.max(-1, Math.min(1, (road[i] - this._lastRoad[i]) / dt));
+      this._lastRoad[i] = road[i];
+    }
+
     // --- Vertical loads from the sprung chassis (springs/dampers/ARBs) ---
     const v = this.speed;
     const down = p.CdownV2 * v * v;
@@ -95,7 +114,10 @@ export class Car {
       return F;
     };
     const S = [];
-    for (let i = 0; i < 4; i++) S.push(stat[i] + springF(hC[i], hdC[i]));
+    // suspension works on travel relative to the local road surface
+    for (let i = 0; i < 4; i++) {
+      S.push(stat[i] + springF(hC[i] - road[i], hdC[i] - roadRate[i]));
+    }
     // anti-roll bars couple left/right corner deflections per axle
     const arbF = p.arbFront * (hC[0] - hC[1]);
     const arbR = p.arbRear * (hC[2] - hC[3]);
@@ -140,9 +162,19 @@ export class Car {
       const kappa = (wOmega[i] * rw - vXw) / denom;
       const alpha = Math.atan(vYw / denom);
 
-      const tf = tireForces(Fz[i], kappa, alpha, p.tire);
+      // thermal grip factor: traction compound has an optimum window
+      const tp = p.tire;
+      const dT = this.tireT[i] - tp.Topt;
+      const tempF = Math.max(0.72, 1 - tp.tempSens * dT * dT);
+      const tf = tireForces(Fz[i], kappa, alpha, p.tire, gripW[i] * tempF);
       // rolling resistance acts on the body, smooth around zero speed
       const Frr = -p.rollResist * Fz[i] * Math.tanh(vXw / 0.3);
+      // tread heating: slip power + rolling hysteresis, convective cooling
+      const vsx = -kappa * denom, vsy = vYw;
+      const Pslip = Math.abs(tf.Fx * vsx) + Math.abs(tf.Fy * vsy)
+        + Math.abs(Frr * vXw);
+      this.tireT[i] += dt * (Pslip / tp.heatCap
+        - (tp.cool + tp.coolV * v) * (this.tireT[i] - tp.Tamb));
 
       // camber thrust: static camber (tops lean inward) + roll-induced lean
       const gamma = (wy[i] > 0 ? -1 : 1) * p.staticCamber
@@ -237,5 +269,8 @@ export class Car {
 
     this.tel.Fz = Fz; this.tel.sat = satArr; this.tel.motorI = Iout;
     this.tel.ax = axRaw; this.tel.ay = ayRaw;
+    // shock compression (mm, + = compressed) relative to static
+    this.tel.shock = [0, 1, 2, 3].map(i => (road[i] - hC[i]) * 1000);
+    this.tel.grip = gripW;
   }
 }
