@@ -284,7 +284,8 @@ def shade(color, p):
     ln = np.linalg.norm(nv)
     lam = abs(float(nv @ LIGHT)) / ln if ln > 1e-12 else 1.0
     b = 0.55 + 0.45 * lam
-    return tuple(min(255, int(c * b)) for c in color)
+    spec = 255 * 0.55 * lam ** 14  # polycarbonate-shell highlight
+    return tuple(min(255, int(c * b + spec)) for c in color)
 
 
 # ---------------------------------------------------------------------------
@@ -304,8 +305,14 @@ def build_car_polys(cardef, fr):
     def tr(pts):
         out = []
         for px_, py_, pz in pts:
-            pz2 = pz + (py_ * roll - px_ * pitch if tilt[0] else 0.0)
-            out.append((x + px_ * cy - py_ * sy, y + px_ * sy + py_ * cy, pz2))
+            # body rotates about the roll axis near the ground (z~6 mm), so
+            # the shell top visibly displaces toward the outside of the corner
+            if tilt[0]:
+                py2 = py_ - roll * (pz - 0.006)
+                pz2 = pz + py_ * roll - px_ * pitch
+            else:
+                py2, pz2 = py_, pz
+            out.append((x + px_ * cy - py2 * sy, y + px_ * sy + py2 * cy, pz2))
         return np.array(out)
 
     polys = []

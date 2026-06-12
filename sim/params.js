@@ -36,8 +36,8 @@ export const TC_PARAMS = {
   // --- Tires (Pacejka magic formula, per wheel) ---
   tire: {
     Fz0: 3.385,          // N, nominal load (mg/4)
-    mu0: 2.45,           // peak friction coefficient at nominal load (high-grip asphalt)
-    loadSens: 0.07,      // mu drops by this fraction per +100% load
+    mu0: 2.75,           // peak friction coefficient at nominal load (high-grip asphalt)
+    loadSens: 0.062,      // mu drops by this fraction per +100% load
     // Lateral: peak at ~8 deg slip angle
     By: 12.4, Cy: 1.5, Ey: -0.3,
     alphaPeak: 0.14,     // rad, used for combined-slip normalization
@@ -97,11 +97,11 @@ export const TC_PARAMS_MOD = {
     Kv: 6100 * Math.PI / 30, // rad/s per volt
     R: 0.010,
     Vbatt: 7.7,
-    Imax: 140,
-    IbrakeMax: 140
+    Imax: 155,
+    IbrakeMax: 170
   },
-  gearRatio: 4.0,
+  gearRatio: 3.8,
   motorRotorInertia: 1.0e-6,
-  CdragV2: 0.013,          // mod body, more aggressive but draggier at speed
-  CdownV2: 0.010
+  CdragV2: 0.012,          // mod body, more aggressive but draggier at speed
+  CdownV2: 0.011
 };

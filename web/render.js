@@ -140,12 +140,12 @@ export function buildCarPolys(p, car) {
   const hl = p.halfLength, hw = p.halfWidth, rw = p.wheelRadius, a = p.a, tw = p.track / 2;
   const cy = Math.cos(car.yaw), sy = Math.sin(car.yaw);
   const roll = car.phi || 0, pitch = car.theta || 0;
-  let tiltBody = false; // shell tilts with chassis, wheels stay on the ground
-  const tr = (lx, ly, lz) => [
-    car.x + lx * cy - ly * sy,
-    car.y + lx * sy + ly * cy,
-    lz + (tiltBody ? ly * roll - lx * pitch : 0)
-  ];
+  let tiltBody = false; // shell rolls about the low roll axis, wheels stay put
+  const tr = (lx, ly, lz) => {
+    const ly2 = tiltBody ? ly - roll * (lz - 0.006) : ly;
+    const lz2 = tiltBody ? lz + ly * roll - lx * pitch : lz;
+    return [car.x + lx * cy - ly2 * sy, car.y + lx * sy + ly2 * cy, lz2];
+  };
   const polys = [];
   const box = (x0, x1, y0, y1, z0, z1, color) => {
     const c = [

@@ -60,17 +60,19 @@ def synth(telemetry_path, max_laps=None):
     spin = np.clip(rpm / 5000.0, 0, 1)
     doppler = 1.0 / (1.0 + vrad / 343.0)
 
-    # --- motor / spur whine: smooth harmonic stack, two detuned voices ---
-    f0 = rpm / 60.0 * 2.2 * doppler
-    vib = 1 + 0.0025 * np.sin(2 * np.pi * 6.5 * ta)
-    ph1 = 2 * np.pi * np.cumsum(f0 * vib) / FS
-    ph2 = 2 * np.pi * np.cumsum(f0 * 1.004) / FS
+    # --- motor / spur whine: bright fast-sweeping EP tone, two detuned voices ---
+    f0 = rpm / 60.0 * 3.2 * doppler
+    ph1 = 2 * np.pi * np.cumsum(f0) / FS
+    ph2 = 2 * np.pi * np.cumsum(f0 * 1.006) / FS
     def voice(ph):
-        return (np.sin(ph) + 0.50 * np.sin(2 * ph) + 0.26 * np.sin(3 * ph)
-                + 0.12 * np.sin(4 * ph))
+        return (np.sin(ph) + 0.70 * np.sin(2 * ph) + 0.45 * np.sin(3 * ph)
+                + 0.30 * np.sin(4 * ph) + 0.16 * np.sin(5 * ph))
     motor = 0.6 * voice(ph1) + 0.4 * voice(ph2)
-    motor = np.tanh(1.15 * motor) * 0.55
-    motor *= (0.07 + 0.40 * thr + 0.20 * brk) * spin
+    motor = np.tanh(1.05 * motor) * 0.5
+    # remove low-frequency mud: EP whine has almost no bass content
+    motor -= lowpass(motor.astype(np.float32), 0.04)
+    # fast attack on throttle stabs, slightly slower release
+    motor *= (0.05 + 0.55 * thr ** 0.8 + 0.22 * brk) * spin
 
     # --- belt whirr: noise amplitude-modulated at belt frequency ---
     fbelt = rpm / 60.0 * 0.5 * doppler
@@ -91,7 +93,7 @@ def synth(telemetry_path, max_laps=None):
     gdist = np.clip(5.5 / dist, 0.18, 1.0)
     mix = (motor + whirr + scrub) * gdist + wnd
     mix = np.tanh(1.1 * mix)
-    mix = lowpass(mix.astype(np.float32), 0.55)  # take the edge off the top end
+    mix = lowpass(mix.astype(np.float32), 0.78)  # keep the EP top-end crisp
     mix *= 0.65 / max(1e-6, np.abs(mix).max())
 
     left = mix * np.sqrt(0.5 * (1 - 0.8 * pan))

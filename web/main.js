@@ -8,8 +8,12 @@ import { World } from '../sim/world.js';
 import { makeSurface } from '../sim/surface.js';
 import { StandCamera, drawScene, prepareGeometry, buildCarPolys, centroid } from './render.js';
 import { CarSound } from './sound.js';
+import { RadioInput } from './input.js';
+import { buildPanel, loadSetup, applySetup } from './setup.js';
 
 const sound = new CarSound();
+const radio = new RadioInput();
+let setupVals = loadSetup();
 
 const canvas = document.getElementById('view');
 const ctx = canvas.getContext('2d');
@@ -43,10 +47,10 @@ function grooveDecals(track) {
 function setTrack(name) {
   trackName = name;
   track = buildTrack(name);
-  params = motorClass === 'mod' ? TC_PARAMS_MOD : TC_PARAMS;
+  params = applySetup(motorClass === 'mod' ? TC_PARAMS_MOD : TC_PARAMS, setupVals);
   car = new Car(params);
   const opts = motorClass === 'mod'
-    ? { speed: { ayMax: 22.8, axBrake: 17.5, axAccel: 15.5, vTop: 32 }, kp: 1.2,
+    ? { speed: { ayMax: 24.6, axBrake: 20.5, axAccel: 18, vTop: 35 }, kp: 1.2,
         line: { margin: 0.24, iterations: 2000 } }
     : { speed: { ayMax: 21, axBrake: 15, axAccel: 12, vTop: 19 }, kp: 1.2,
         line: { margin: 0.24, iterations: 2000 } };
@@ -75,12 +79,25 @@ addEventListener('keydown', e => {
     motorClass = motorClass === 'mod' ? 'stock' : 'mod';
     setTrack(trackName);
   }
+  if (e.code === 'KeyG') {
+    if (!radio.wizard) radio.startCalibration();
+    else radio.advanceCalibration();
+  }
+  if (e.code === 'KeyT') {
+    const p = document.getElementById('setupPanel');
+    p.style.display = p.style.display === 'block' ? 'none' : 'block';
+  }
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 
 let steerIn = 0, thrIn = 0;
 function readControls(dt) {
+  const r = radio.read();
+  if (r) {
+    car.setControls(r.steer, r.brake > 0.05 ? 0 : r.throttle, r.brake);
+    return;
+  }
   const sTgt = (keys.ArrowLeft || keys.KeyJ ? 1 : 0) + (keys.ArrowRight || keys.KeyL ? -1 : 0);
   const sRate = sTgt !== 0 ? 7 : 10; // snap back to center faster
   steerIn += Math.max(-sRate * dt, Math.min(sRate * dt, sTgt - steerIn));
@@ -131,6 +148,16 @@ function hud() {
     ctx.fillStyle = '#ffd778';
     ctx.font = 'bold 16px sans-serif';
     ctx.fillText('AI DRIVING (press A to take over)', w / 2 - 130, 30);
+  }
+  const prompt = radio.wizardPrompt();
+  if (prompt) {
+    ctx.fillStyle = '#ffd778';
+    ctx.font = 'bold 18px sans-serif';
+    ctx.fillText(prompt, w / 2 - 280, h / 2);
+  } else if (radio.connected && radio.cal) {
+    ctx.fillStyle = '#7aff8c';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillText('RADIO', 220, h - 76);
   }
   // minimap
   const mmW = 200, mmH = 140, mx = w - mmW - 16, my = 16;
@@ -192,5 +219,6 @@ function resize() {
 }
 addEventListener('resize', resize);
 resize();
+buildPanel(document.getElementById('setupPanel'), sv => { setupVals = sv; setTrack(trackName); });
 setTrack('oval');
 requestAnimationFrame(frame);

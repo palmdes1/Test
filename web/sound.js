@@ -25,7 +25,7 @@ export class CarSound {
     this.motorGain.gain.value = 0;
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.value = 5200;
+    lp.frequency.value = 6500;
     this.osc1.connect(this.motorGain);
     this.osc2.connect(this.motorGain);
     this.motorGain.connect(lp);
@@ -67,9 +67,9 @@ export class CarSound {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     const rpm = car.omegaDrive * car.p.gearRatio * 60 / (2 * Math.PI);
-    const f = Math.max(20, rpm / 60 * 3);
+    const f = Math.max(20, rpm / 60 * 3.2);
     this.osc1.frequency.setTargetAtTime(f, t, 0.02);
-    this.osc2.frequency.setTargetAtTime(f * 2, t, 0.02);
+    this.osc2.frequency.setTargetAtTime(f * 1.006, t, 0.02);
     const spin = Math.min(1, rpm / 4000);
     const amp = (0.05 + 0.4 * car.throttle + 0.25 * car.brake) * spin * 0.16;
     this.motorGain.gain.setTargetAtTime(amp, t, 0.03);
