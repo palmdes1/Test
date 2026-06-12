@@ -54,6 +54,13 @@ function setTrack(name) {
         line: { margin: 0.24, iterations: 2000 } }
     : { speed: { ayMax: 21, axBrake: 15, axAccel: 12, vTop: 19 }, kp: 1.2,
         line: { margin: 0.24, iterations: 2000 } };
+  // scale AI limits to the chosen setup (compound grip, weight)
+  const aiScale = Math.pow(setupVals.compound / 100, 2)
+    * Math.pow(1380 / setupVals.massG, 0.25)
+    * (setupVals.frontDiff === 'gear' ? 0.92 : 1);  // gear diff is a handful
+  opts.speed.ayMax *= aiScale;
+  opts.speed.axBrake *= aiScale;
+  opts.speed.axAccel *= aiScale;
   world = new World(track, car);
   driver = new Driver(track, car, opts);
   car.surfaceFn = makeSurface(track, driver.line);
