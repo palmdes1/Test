@@ -41,6 +41,7 @@ F_BIG, F_MED, F_SML = load_font(34), load_font(22), load_font(16)
 
 class GroundTexture:
     def __init__(self, data, ppm=36):
+        self.dirt = data["track"]["name"] == "dirt"
         center = np.array(data["track"]["center"])
         hw = data["track"]["halfWidth"]
         margin = 16.0
@@ -94,7 +95,7 @@ class GroundTexture:
             for i in range(0, n, 2):
                 quad = [edge(i, side * hw), edge(i + 2, side * hw),
                         edge(i + 2, side * (hw + 0.55)), edge(i, side * (hw + 0.55))]
-                draw.polygon([px(q) for q in quad], fill=(110, 118, 88))
+                draw.polygon([px(q) for q in quad], fill=(122, 98, 66) if self.dirt else (110, 118, 88))
 
         # --- asphalt (also build a mask for wear/blotch overlay) ---
         mask = Image.new("L", self.size, 0)
@@ -103,7 +104,7 @@ class GroundTexture:
             quad = [edge(i, hw + 0.05), edge(i + 2, hw + 0.05),
                     edge(i + 2, -hw - 0.05), edge(i, -hw - 0.05)]
             qq = [px(q) for q in quad]
-            draw.polygon(qq, fill=(72, 72, 76))
+            draw.polygon(qq, fill=(146, 114, 78) if self.dirt else (72, 72, 76))
             mdraw.polygon(qq, fill=255)
         self._track_mask = mask
 
@@ -132,7 +133,7 @@ class GroundTexture:
         stripe = 0
         for i in range(0, n, 2):
             k = curv[i]
-            if abs(k) > 0.09:
+            if abs(k) > 0.09 and not self.dirt:
                 side = 1 if k > 0 else -1
                 quad = [edge(i, side * (hw - 0.02)), edge(i + 2, side * (hw - 0.02)),
                         edge(i + 2, side * (hw + 0.42)), edge(i, side * (hw + 0.42))]
@@ -155,7 +156,7 @@ class GroundTexture:
         gd.line(gpts, fill=175, width=int(0.55 * ppm))
         gd.line(gpts, fill=105, width=int(1.05 * ppm))
         groove = groove.filter(ImageFilter.GaussianBlur(ppm * 0.12))
-        dark = Image.new("RGB", self.size, (33, 33, 37))
+        dark = Image.new("RGB", self.size, (96, 74, 52) if self.dirt else (33, 33, 37))
         img = Image.composite(dark, img, groove)
         draw = ImageDraw.Draw(img)
 
@@ -262,8 +263,8 @@ class StandCamera:
         self.look = None
         self.fov = math.radians(30)
 
-    def update(self, target, dt):
-        t = np.array([target[0], target[1], 0.05])
+    def update(self, target, dt, tz=0.0):
+        t = np.array([target[0], target[1], tz + 0.05])
         if self.look is None:
             self.look = t
         k = dt / (0.13 + dt)
@@ -295,6 +296,8 @@ def shade(color, p):
 def build_car_polys(cardef, fr):
     x, y, yaw, steer = fr["x"], fr["y"], fr["yaw"], fr["steer"]
     roll, pitch = fr.get("roll", 0.0), fr.get("pitch", 0.0)
+    zcar = fr.get("z", 0.0)
+    lift = cardef.get("bodyLift", 0.0)
     hl, hw = cardef["halfLength"], cardef["halfWidth"]
     rw = cardef["wheelRadius"]
     a = cardef["a"]
@@ -309,10 +312,10 @@ def build_car_polys(cardef, fr):
             # the shell top visibly displaces toward the outside of the corner
             if tilt[0]:
                 py2 = py_ - roll * (pz - 0.006)
-                pz2 = pz + py_ * roll - px_ * pitch
+                pz2 = pz + lift + py_ * roll - px_ * pitch
             else:
                 py2, pz2 = py_, pz
-            out.append((x + px_ * cy - py2 * sy, y + px_ * sy + py2 * cy, pz2))
+            out.append((x + px_ * cy - py2 * sy, y + px_ * sy + py2 * cy, pz2 + zcar))
         return np.array(out)
 
     polys = []
@@ -456,8 +459,9 @@ def build_hood_polys(cardef, fr):
 def car_shadow(cardef, fr):
     hl, hw = cardef["halfLength"] * 1.05, cardef["halfWidth"] * 1.2
     cy, sy = math.cos(fr["yaw"]), math.sin(fr["yaw"])
+    gz = fr.get("gz", 0.0) + 0.004
     return np.array([
-        (fr["x"] + lx * cy - ly * sy, fr["y"] + lx * sy + ly * cy, 0.004)
+        (fr["x"] + lx * cy - ly * sy, fr["y"] + lx * sy + ly * cy, gz)
         for lx, ly in ((-hl, -hw), (hl, -hw), (hl, hw), (-hl, hw))
     ])
 
@@ -562,7 +566,9 @@ def render(telemetry_path, out_path, max_laps=None):
     data = json.load(open(telemetry_path))
     frames = data["frames"]
     if max_laps is not None:
-        frames = [f for f in frames if f["lap"] <= max_laps]
+        # negative = render just that one lap number
+        frames = ([f for f in frames if f["lap"] == -max_laps] if max_laps < 0
+                  else [f for f in frames if f["lap"] <= max_laps])
     fps_in = data["fps"]
 
     ground = GroundTexture(data)
@@ -599,7 +605,7 @@ def render(telemetry_path, out_path, max_laps=None):
     RW, RH = W * 2, H * 2                    # 2x supersampling
     PW, PH = PIP_W * 2, PIP_H * 2
     for fi, fr in enumerate(frames):
-        cam.update((fr["x"], fr["y"]), 1.0 / fps_in)
+        cam.update((fr["x"], fr["y"]), 1.0 / fps_in, fr.get("z", 0.0))
         B = cam.basis(RW, RH)
 
         carpolys = [(p, c, True) for p, c in build_car_polys(data["car"], fr)]
@@ -610,9 +616,10 @@ def render(telemetry_path, out_path, max_laps=None):
         # ---- in-car PIP (cockpit cam: hood fixed in view, world rolls) ----
         yaw, roll, pitch = fr["yaw"], fr.get("roll", 0.0), fr.get("pitch", 0.0)
         dyaw = (math.cos(yaw), math.sin(yaw))
-        eye = (fr["x"] - dyaw[0] * 0.03, fr["y"] - dyaw[1] * 0.03, 0.092)
+        zc = fr.get("z", 0.0)
+        eye = (fr["x"] - dyaw[0] * 0.03, fr["y"] - dyaw[1] * 0.03, 0.092 + zc)
         look = (eye[0] + dyaw[0] * 5, eye[1] + dyaw[1] * 5,
-                0.092 - 0.042 - pitch * 2.5)
+                0.092 + zc - 0.042 - pitch * 2.5)
         pipB = CameraBasis(eye, look, math.radians(74), PW, PH, up_roll=-roll)
         hood = [(p, c, True) for p, c in build_hood_polys(data["car"], fr)]
         pip = render_view(pipB, ground, statics + hood, sky, PW, PH, near=0.085).resize(

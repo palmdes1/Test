@@ -35,7 +35,9 @@ def synth(telemetry_path, max_laps=None):
     data = json.load(open(telemetry_path))
     frames = data["frames"]
     if max_laps is not None:
-        frames = [f for f in frames if f["lap"] <= max_laps]
+        # negative = render just that one lap number
+        frames = ([f for f in frames if f["lap"] == -max_laps] if max_laps < 0
+                  else [f for f in frames if f["lap"] <= max_laps])
     fps = data["fps"]
     stand = data["track"]["stand"]
     n_fr = len(frames)
@@ -59,6 +61,33 @@ def synth(telemetry_path, max_laps=None):
     rng = np.random.default_rng(3)
     spin = np.clip(rpm / 5000.0, 0, 1)
     doppler = 1.0 / (1.0 + vrad / 343.0)
+
+    nitro = 'Nitro' in data.get('carName', '')
+    if nitro:
+        # .21 2-stroke: firing fundamental with rich harmonics + exhaust rasp
+        rpmN = np.maximum(rpm, 9000)  # engine idles / clutch slips below this
+        f0n = rpmN / 60.0 * doppler
+        phn = 2 * np.pi * np.cumsum(f0n) / FS
+        eng = (np.sin(phn) + 0.8 * np.sin(2 * phn) + 0.65 * np.sin(3 * phn)
+               + 0.5 * np.sin(4 * phn) + 0.35 * np.sin(5 * phn)
+               + 0.22 * np.sin(6 * phn) + 0.15 * np.sin(8 * phn))
+        eng = np.tanh(1.6 * eng)
+        rasp = rng.standard_normal(n).astype(np.float32)
+        rasp = lowpass(rasp, 0.45) * (0.6 + 0.4 * np.sin(phn))
+        motor = (eng * 0.5 + rasp * 0.35) * (0.30 + 0.55 * thr ** 0.7 + 0.05 * brk)
+        scrub = lowpass(rng.standard_normal(n).astype(np.float32), 0.10)
+        env = np.clip((slip - 0.9) / 0.6, 0, 1) ** 1.5 * np.clip(v / 5.0, 0, 1)
+        scrub *= env * 0.4
+        wnd = lowpass(rng.standard_normal(n).astype(np.float32), 0.04)
+        wnd = wnd * (0.25 * (v / 25.0) ** 2) + wnd * 0.012
+        gdist = np.clip(6.5 / dist, 0.2, 1.0)
+        mix = (motor + scrub) * gdist + wnd
+        mix = np.tanh(1.1 * mix)
+        mix = lowpass(mix.astype(np.float32), 0.6)
+        mix *= 0.68 / max(1e-6, np.abs(mix).max())
+        left = mix * np.sqrt(0.5 * (1 - 0.8 * pan))
+        right = mix * np.sqrt(0.5 * (1 + 0.8 * pan))
+        return (np.stack([left, right], axis=1) * 32767).astype(np.int16)
 
     # --- motor / spur whine: bright fast-sweeping EP tone, two detuned voices ---
     f0 = rpm / 60.0 * 3.2 * doppler

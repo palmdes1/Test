@@ -124,6 +124,9 @@ export class Car {
     const arbR = p.arbRear * (hC[2] - hC[3]);
     S[0] -= arbF; S[1] += arbF;
     S[2] -= arbR; S[3] += arbR;
+    // full droop: shocks push, never pull - all four at zero = airborne
+    for (let i = 0; i < 4; i++) S[i] = Math.max(0, S[i]);
+    this.airborne = S[0] + S[1] + S[2] + S[3] < 0.01;
     // geometric load transfer (through roll center / anti geometry, bypasses
     // the springs; uses last step's tire forces - negligible lag at 5 kHz)
     const geo = this._geo || { FyF: 0, FyR: 0, Fx: 0 };
@@ -201,10 +204,27 @@ export class Car {
     }
 
     // --- Motor / ESC ---
-    const mo = p.motor;
-    const Kt = 1 / mo.Kv;
     const omegaM = this.omegaDrive * p.gearRatio;
     let Tm = 0, Iout = 0;
+    if (p.engine) {
+      // nitro 2-stroke + centrifugal clutch + drivetrain disc brake
+      const en = p.engine;
+      const rpmE = omegaM * 60 / (2 * Math.PI);
+      if (this.brake > 0.01) {
+        Tm = -(en.brakeTorque * this.brake) / p.gearRatio;
+      } else if (this.throttle > 0.02) {
+        // clutch slips on launch: the engine revs into its powerband
+        const rpmEff = Math.max(rpmE, this.throttle * 20000);
+        const dR = rpmEff - en.peakRpm;
+        const shape = 0.25 + 0.75 * Math.exp(-(dR * dR) / (2 * en.width * en.width));
+        Tm = this.throttle * en.Tmax * shape * (rpmE < en.clutchIn ? 0.85 : 1)
+          * p.drivetrainEff;
+      } else {
+        Tm = -en.engineBrake * Math.min(Math.max(rpmE / en.peakRpm, 0), 1.2);
+      }
+    } else {
+    const mo = p.motor;
+    const Kt = 1 / mo.Kv;
     if (this.brake > 0.01) {
       // proportional ESC brake: shorts the windings, torque opposes rotation
       const Ib = Math.min((omegaM / mo.Kv) / mo.R, mo.IbrakeMax) * this.brake;
@@ -218,12 +238,15 @@ export class Car {
       Tm = Kt * I * (I > 0 ? p.drivetrainEff : 1);
       Iout = I;
     }
+    }
 
     // --- Drivetrain dynamics ---
     const Idrive = 4 * p.wheelInertia + p.motorRotorInertia * p.gearRatio * p.gearRatio;
     const Twheels = Tm * p.gearRatio;
-    this.omegaDrive += dt * (Twheels - driveReact) / Idrive;
+    const omegaPrev = this.omegaDrive;
+    this.omegaDrive += dt * ((Twheels - driveReact) / Idrive);
     if (this.omegaDrive < 0) this.omegaDrive = 0; // no reverse in racing
+    const alphaDrive = (this.omegaDrive - omegaPrev) / dt; // realized accel
     // gear diffs: left/right speed difference driven by tire torque imbalance
     this.deltaRear += dt * (-(FxwArr[2] - FxwArr[3]) * rw - p.rearDiffDamping * this.deltaRear)
       / p.wheelInertia;
@@ -258,10 +281,19 @@ export class Car {
     }
     tauX += Fy * (p.hCG - p.hRollCenter);
     tauY -= Fx * p.hCG * (1 - p.antiPitch);
-    this.dphi += dt * tauX / p.Ixx;
+    // gyroscopic reaction of the spinning drivetrain: braking pitches the
+    // nose down, throttle lifts it - the mid-air attitude control every
+    // offroad driver uses
+    tauY += -Idrive * alphaDrive;
+    this.dphi += dt * (tauX - 0.01 * this.dphi) / p.Ixx;
     this.phi += dt * this.dphi;
-    this.dtheta += dt * tauY / p.Iyy;
+    this.dtheta += dt * (tauY - 0.01 * this.dtheta) / p.Iyy;
     this.theta += dt * this.dtheta;
+    // beyond ~35 deg a real car is crashing; keep it recoverable (step-1
+    // simplification: no rollover state)
+    const attMax = 0.6;
+    if (Math.abs(this.phi) > attMax) { this.phi = Math.sign(this.phi) * attMax; this.dphi = 0; }
+    if (Math.abs(this.theta) > attMax) { this.theta = Math.sign(this.theta) * attMax; this.dtheta = 0; }
 
     // --- Filtered accelerations (telemetry / driver feel) ---
     const k = dt / (p.suspTau + dt);
@@ -273,5 +305,7 @@ export class Car {
     // shock compression (mm, + = compressed) relative to static
     this.tel.shock = [0, 1, 2, 3].map(i => (road[i] - hC[i]) * 1000);
     this.tel.grip = gripW;
+    this.tel.groundZ = (road[0] + road[1] + road[2] + road[3]) / 4;
+    this.tel.zH = this.zH;
   }
 }

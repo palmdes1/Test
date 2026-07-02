@@ -26,8 +26,18 @@ export class World {
     const j = wrap(i + 1, n);
     const yaw = Math.atan2(t.pts[j][1] - t.pts[i][1], t.pts[j][0] - t.pts[i][0]);
     this.car.reset(t.pts[i][0], t.pts[i][1], yaw);
+    this.settleOnGround();
     this.nearIdx = i;
     this.prevS = t.s[i];
+  }
+
+  /** Match chassis height to the local ground (jumps, features). */
+  settleOnGround() {
+    const c = this.car;
+    if (!c.surfaceFn) return;
+    const h = c.surfaceFn(c.x, c.y).height;
+    c.zH = h;
+    c._lastRoad = [h, h, h, h];
   }
 
   nearestCenter() {
@@ -89,6 +99,21 @@ export class World {
   /** Advance by frame dt (substepped). Optional controller called per frame. */
   step(dt, controller) {
     if (controller) controller();
+    // track marshal: pinned against a board for >2 s -> set back on track
+    if (this.car.speed < 0.5 && this.car.throttle > 0.3) {
+      this._stuck = (this._stuck || 0) + dt;
+      if (this._stuck > 2) {
+        const i = this.nearestCenter();
+        const j = (i + 1) % this.track.pts.length;
+        const yaw = Math.atan2(this.track.pts[j][1] - this.track.pts[i][1],
+                               this.track.pts[j][0] - this.track.pts[i][0]);
+        this.car.reset(this.track.pts[i][0], this.track.pts[i][1], yaw);
+        this.settleOnGround();
+        this._stuck = 0;
+      }
+    } else {
+      this._stuck = 0;
+    }
     this.acc += dt;
     while (this.acc > PHYS_DT / 2) {
       this.car.step(PHYS_DT);

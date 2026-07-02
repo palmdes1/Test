@@ -105,3 +105,53 @@ export const TC_PARAMS_MOD = {
   CdragV2: 0.012,          // mod body, more aggressive but draggier at speed
   CdownV2: 0.011
 };
+
+// 1/8 nitro buggy: .21 (3.5cc) 2-stroke, centrifugal clutch, 4WD, disc brake,
+// long-travel suspension, knobby tires on dirt. ROAR/IFMAR-typical specs:
+// ~3.3 kg fueled, 325 mm wheelbase, 112 mm tires, ~2.2 kW at ~30k rpm.
+export const BUGGY_PARAMS = {
+  name: '1/8 Nitro Buggy .21',
+  mass: 3.3,
+  Izz: 0.065, Ixx: 0.018, Iyy: 0.055,
+  wheelbase: 0.325, a: 0.16, b: 0.165,
+  track: 0.25, hCG: 0.05, wheelRadius: 0.056,
+
+  springRate: 380, damping: 30,
+  arbFront: 45, arbRear: 30,
+  bumpTravel: 0.026, bumpRate: 3500,
+  hRollCenter: 0.02, antiPitch: 0.15,
+  staticCamber: 0.017, camberComp: 0.4, camberThrust: 0.5,
+  suspTau: 0.03,
+
+  tire: {
+    Fz0: 8.09, mu0: 1.25, loadSens: 0.05,
+    By: 8.0, Cy: 1.35, Ey: -0.3, alphaPeak: 0.24,   // dirt slides progressively
+    Bx: 7.5, Cx: 1.3, Ex: -0.4, kappaPeak: 0.25,
+    relaxLen: 0.05,
+    T0: 35, Tamb: 26, Topt: 48, tempSens: 0.00008,  // knobbies: wide window
+    heatCap: 40, cool: 0.012, coolV: 0.001
+  },
+
+  toeRear: 0.052,
+  maxSteer: 0.42, steerRate: 7.0, ackermann: 1.0,
+
+  frontDrive: 'gear',        // 1/8: three gear diffs (center simplified rigid)
+  gearRatio: 11.6, drivetrainEff: 0.8,
+  wheelInertia: 2.5e-4,
+  motorRotorInertia: 8.0e-6, // crank+clutch+flywheel
+  rearDiffDamping: 6e-4,
+
+  // nitro engine (replaces `motor` when present)
+  engine: {
+    Tmax: 0.78,              // N m peak torque
+    peakRpm: 27000,
+    width: 14000,            // torque-curve falloff width
+    clutchIn: 9000,          // rpm, centrifugal clutch fully in
+    engineBrake: 0.05,       // N m closed-throttle drag
+    brakeTorque: 5.5         // N m disc brake at drivetrain (all wheels)
+  },
+
+  CdragV2: 0.05, CdownV2: 0.012,
+  rollResist: 0.05,
+  halfLength: 0.27, halfWidth: 0.153
+};

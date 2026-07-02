@@ -28,6 +28,23 @@ function valueNoise(x, y, seed) {
  * Returns fn(x, y) -> { grip, height } where grip multiplies tire mu and
  * height is the local road elevation in metres.
  */
+function featureHeight(sVal, features) {
+  let h = 0;
+  for (const f of features) {
+    if (f.type === 'whoops') {
+      if (sVal >= f.s0 && sVal <= f.s1) {
+        h += f.amp * 0.5 * (1 - Math.cos(2 * Math.PI * (sVal - f.s0) / f.wl));
+      }
+    } else if (sVal >= f.s0 && sVal <= f.s3) {
+      // trapezoid ramp: up s0-s1, flat s1-s2, down s2-s3
+      if (sVal < f.s1) h += f.h * (sVal - f.s0) / (f.s1 - f.s0);
+      else if (sVal <= f.s2) h += f.h;
+      else h += f.h * (f.s3 - sVal) / (f.s3 - f.s2);
+    }
+  }
+  return h;
+}
+
 export function makeSurface(track, line, opts = {}) {
   const gripNoiseAmp = opts.gripNoiseAmp ?? 0.065;  // +-6.5% patchy asphalt
   const grooveBonus = opts.grooveBonus ?? 0.055;    // rubbered-in line
@@ -35,6 +52,8 @@ export function makeSurface(track, line, opts = {}) {
   const roughFine = opts.roughFine ?? 0.0013;       // m, ~0.7 m wavelength
   const roughCoarse = opts.roughCoarse ?? 0.0026;   // m, ~3 m undulation
   const seed = opts.seed ?? 11;
+  const features = opts.features ?? track.features ?? [];
+  const tN2 = track.pts.length;
 
   // grid of distance-to-racing-line over the track bbox (0.5 m cells)
   const cell = 0.5, margin = 6;
@@ -47,8 +66,10 @@ export function makeSurface(track, line, opts = {}) {
   const nx = Math.ceil((maxx - minx) / cell) + 1;
   const ny = Math.ceil((maxy - miny) / cell) + 1;
   const dist = new Float32Array(nx * ny).fill(99);
+  const sGrid = new Float32Array(nx * ny);
   const lpx = [], lpy = [];
   for (let i = 0; i < line.n; i += 4) { lpx.push(line.px[i]); lpy.push(line.py[i]); }
+  const tN = track.pts.length;
   for (let gy = 0; gy < ny; gy++) {
     for (let gx = 0; gx < nx; gx++) {
       const x = minx + gx * cell, y = miny + gy * cell;
@@ -58,6 +79,13 @@ export function makeSurface(track, line, opts = {}) {
         if (d < best) best = d;
       }
       dist[gy * nx + gx] = Math.sqrt(best);
+      // nearest track point index (refined per query for continuous s)
+      let bd2 = 1e9, bi = 0;
+      for (let k = 0; k < tN; k += 6) {
+        const d2 = (track.pts[k][0] - x) ** 2 + (track.pts[k][1] - y) ** 2;
+        if (d2 < bd2) { bd2 = d2; bi = k; }
+      }
+      sGrid[gy * nx + gx] = bi;
     }
   }
   const lineDist = (x, y) => {
@@ -77,9 +105,29 @@ export function makeSurface(track, line, opts = {}) {
       + grooveBonus * Math.exp(-(d * d) / (0.45 * 0.45))
       - dustPenalty * Math.min(Math.max((d - 0.9) / 1.3, 0), 1);
     grip = Math.min(Math.max(grip, 0.82), 1.1);
-    const height =
+    let height =
       roughFine * 2 * (valueNoise(x / 0.7, y / 0.7, seed + 1) - 0.5) +
       roughCoarse * 2 * (valueNoise(x / 3.0, y / 3.0, seed + 2) - 0.5);
+    if (features.length && d < 6) {
+      const fx2 = Math.min(Math.max((x - minx) / cell, 0), nx - 1.001);
+      const fy2 = Math.min(Math.max((y - miny) / cell, 0), ny - 1.001);
+      const coarse = sGrid[Math.round(fy2) * nx + Math.round(fx2)];
+      // refine to continuous s: nearest of neighbors, then project on segment
+      let bi = coarse, bd = 1e9;
+      for (let k = -7; k <= 7; k++) {
+        const i = ((coarse + k) % tN2 + tN2) % tN2;
+        const d2 = (track.pts[i][0] - x) ** 2 + (track.pts[i][1] - y) ** 2;
+        if (d2 < bd) { bd = d2; bi = i; }
+      }
+      const j = (bi + 1) % tN2;
+      const ex = track.pts[j][0] - track.pts[bi][0];
+      const ey = track.pts[j][1] - track.pts[bi][1];
+      const el2 = ex * ex + ey * ey || 1e-9;
+      const tproj = Math.min(Math.max(
+        ((x - track.pts[bi][0]) * ex + (y - track.pts[bi][1]) * ey) / el2, 0), 1);
+      const sCont = track.s[bi] + tproj * Math.sqrt(el2);
+      height += featureHeight(sCont, features);
+    }
     return { grip, height };
   };
 }

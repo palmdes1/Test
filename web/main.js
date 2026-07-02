@@ -1,7 +1,7 @@
 // Browser game: keyboard-driven 1/10 TC on oval / figure-8, driver's stand view.
 
 import { Car } from '../sim/car.js';
-import { TC_PARAMS, TC_PARAMS_MOD } from '../sim/params.js';
+import { TC_PARAMS, TC_PARAMS_MOD, BUGGY_PARAMS } from '../sim/params.js';
 import { buildTrack, trackGeometry } from '../sim/track.js';
 import { Driver, computeRacingLine } from '../sim/driver.js';
 import { World } from '../sim/world.js';
@@ -47,9 +47,14 @@ function grooveDecals(track) {
 function setTrack(name) {
   trackName = name;
   track = buildTrack(name);
-  params = applySetup(motorClass === 'mod' ? TC_PARAMS_MOD : TC_PARAMS, setupVals);
+  params = motorClass === 'buggy' ? BUGGY_PARAMS
+    : applySetup(motorClass === 'mod' ? TC_PARAMS_MOD : TC_PARAMS, setupVals);
   car = new Car(params);
-  const opts = motorClass === 'mod'
+  const opts = motorClass === 'buggy'
+    ? { speed: { ayMax: 8, axBrake: 7, axAccel: 6.5, vTop: 24 }, kp: 1.0,
+        vJump: 12.5, vWhoops: 10, thrRamp: { base: 0.35, gain: 0.1 },
+        steerComp: 1.35, line: { margin: 0.6, iterations: 1500 } }
+    : motorClass === 'mod'
     ? { speed: { ayMax: 24.6, axBrake: 20.5, axAccel: 18, vTop: 35 }, kp: 1.2,
         line: { margin: 0.24, iterations: 2000 } }
     : { speed: { ayMax: 21, axBrake: 15, axAccel: 12, vTop: 19 }, kp: 1.2,
@@ -63,7 +68,10 @@ function setTrack(name) {
   opts.speed.axAccel *= aiScale;
   world = new World(track, car);
   driver = new Driver(track, car, opts);
-  car.surfaceFn = makeSurface(track, driver.line);
+  car.surfaceFn = makeSurface(track, driver.line, motorClass === 'buggy'
+    ? { gripNoiseAmp: 0.08, grooveBonus: 0.08, dustPenalty: 0.09,
+        roughFine: 0.003, roughCoarse: 0.006 }
+    : {});
   world.placeAtStart(1.0);
   camera = new StandCamera(track.stand);
   scenery = prepareGeometry([...trackGeometry(track), ...grooveDecals(track)]);
@@ -82,6 +90,7 @@ addEventListener('keydown', e => {
   if (e.code === 'Digit1') { motorClass = 'stock'; setTrack('oval'); }
   if (e.code === 'Digit2') { motorClass = 'stock'; setTrack('figure8'); }
   if (e.code === 'Digit3') { motorClass = 'mod'; setTrack('luxembourg'); }
+  if (e.code === 'Digit4') { motorClass = 'buggy'; setTrack('dirt'); }
   if (e.code === 'KeyM') {
     motorClass = motorClass === 'mod' ? 'stock' : 'mod';
     setTrack(trackName);

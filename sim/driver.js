@@ -61,7 +61,7 @@ export function computeRacingLine(track, { margin = 0.32, iterations = 1400, lam
  * passes: longitudinal capacity shrinks as cornering load rises (trail
  * braking / progressive exit throttle, like a real driver).
  */
-export function computeSpeedProfile(line, { ayMax = 19.5, axBrake = 13.5, axAccel = 11, vTop = 18.5 } = {}) {
+export function computeSpeedProfile(line, { ayMax = 19.5, axBrake = 13.5, axAccel = 11, vTop = 18.5 } = {}, caps = []) {
   const n = line.n;
   const ds = new Float64Array(n);
   for (let i = 0; i < n; i++) {
@@ -72,6 +72,10 @@ export function computeSpeedProfile(line, { ayMax = 19.5, axBrake = 13.5, axAcce
   for (let i = 0; i < n; i++) {
     const k = Math.abs(line.curv[i]);
     v[i] = Math.min(vTop, k > 1e-6 ? Math.sqrt(ayMax / k) : vTop);
+  }
+  // jump-approach caps (controlled flight speed), enforced before the passes
+  for (const c of caps) {
+    for (let i = c.i0; i <= c.i1; i++) v[wrap(i, n)] = Math.min(v[wrap(i, n)], c.v);
   }
   const avail = (ax, vi, i) => {
     const latFrac = Math.min(1, (vi * vi * Math.abs(line.curv[i])) / ayMax);
@@ -107,13 +111,27 @@ export class Driver {
     this.car = car;
     this.line = computeRacingLine(track, opts.line);
     this.speedOpts = opts.speed || {};
-    this.vProfile = computeSpeedProfile(this.line, this.speedOpts);
+    // approach-speed caps at jump takeoffs so flight distance stays managed
+    const caps = [];
+    for (const f of track.features || []) {
+      const vJ = f.type === 'whoops' ? (opts.vWhoops ?? 10.5) : (opts.vJump ?? 13.5);
+      const sA = (f.s0 ?? 0) - 4, sB = f.type === 'whoops' ? f.s1 : f.s1;
+      let i0 = 0, i1 = 0;
+      for (let i = 0; i < track.pts.length; i++) {
+        if (track.s[i] < sA) i0 = i;
+        if (track.s[i] < sB) i1 = i;
+      }
+      caps.push({ i0, i1, v: vJ });
+    }
+    this.vProfile = computeSpeedProfile(this.line, this.speedOpts, caps);
     this.idealLap = profileLapTime(this.line, this.vProfile);
     this.vTop = this.speedOpts.vTop ?? 18.5;
     this.corrGain = opts.corrGain ?? 0;
     this.laBase = opts.laBase ?? 0.45;
     this.laGain = opts.laGain ?? 0.28;
     this.kp = opts.kp ?? 0.7;
+    this.thrRamp = opts.thrRamp || null; // {base, gain}: traction-limited rollout
+    this.steerComp = opts.steerComp ?? 1.12; // slip-angle compensation
     this.idx = 0;
     this.wheelbase = car.p.wheelbase;
     this.maxSteer = car.p.maxSteer;
@@ -135,6 +153,14 @@ export class Driver {
 
   update() {
     const car = this.car;
+    if (car.airborne) {
+      // mid-air attitude control: brake rotates the nose down, throttle
+      // lifts it (drivetrain gyro reaction) - level the car for landing
+      if (car.theta < -0.18) car.setControls(0, 0, 0.5);      // nose high
+      else if (car.theta > 0.08) car.setControls(0, 0.8, 0);  // nose low
+      else car.setControls(0, 0.35, 0);
+      return {};
+    }
     const { px, py, n } = this.line;
     const i0 = this.nearest();
     const v = car.speed;
@@ -161,7 +187,7 @@ export class Driver {
     const eLat = ((car.x - px[i0]) * -ty + (car.y - py[i0]) * tx) / tl;
     // correction as curvature (speed-invariant), not steering angle
     const kCorr = Math.max(-0.05, Math.min(0.05, -this.corrGain * eLat));
-    const steerAngle = Math.atan((kappaPP + kCorr) * this.wheelbase) * 1.12;
+    const steerAngle = Math.atan((kappaPP + kCorr) * this.wheelbase) * this.steerComp;
     const steerCmd = steerAngle / this.maxSteer;
 
     // --- speed control: target a bit ahead of current position ---
@@ -201,6 +227,9 @@ export class Driver {
       brake = Math.min(1, -0.55 * (e + 0.4));
     }
 
+    if (this.thrRamp) {
+      throttle = Math.min(throttle, this.thrRamp.base + this.thrRamp.gain * v);
+    }
     car.setControls(steerCmd, throttle, brake);
     return { vT, lookahead: [px[li], py[li]] };
   }

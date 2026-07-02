@@ -5,7 +5,7 @@
 
 import { writeFileSync } from 'node:fs';
 import { Car } from '../sim/car.js';
-import { TC_PARAMS, TC_PARAMS_MOD } from '../sim/params.js';
+import { TC_PARAMS, TC_PARAMS_MOD, BUGGY_PARAMS } from '../sim/params.js';
 import { buildTrack, trackGeometry } from '../sim/track.js';
 import { Driver } from '../sim/driver.js';
 import { World } from '../sim/world.js';
@@ -13,11 +13,15 @@ import { makeSurface } from '../sim/surface.js';
 
 const trackName = process.argv[2] || 'oval';
 const lapsWanted = parseInt(process.argv[3] || '2', 10);
-const motorClass = process.argv[5] || (trackName === 'luxembourg' ? 'mod' : 'stock');
+const motorClass = process.argv[5] || (trackName === 'dirt' ? 'buggy' : trackName === 'luxembourg' ? 'mod' : 'stock');
 const outFile = process.argv[4] || `out/${trackName}_telemetry.json`;
 
-const PARAMS = motorClass === 'mod' ? TC_PARAMS_MOD : TC_PARAMS;
-const driverOpts = motorClass === 'mod'
+const PARAMS = motorClass === 'buggy' ? BUGGY_PARAMS : motorClass === 'mod' ? TC_PARAMS_MOD : TC_PARAMS;
+const driverOpts = motorClass === 'buggy'
+  ? { speed: { ayMax: 8, axBrake: 7, axAccel: 6.5, vTop: 24 }, kp: 1.0,
+      vJump: 12.5, vWhoops: 10, thrRamp: { base: 0.35, gain: 0.1 },
+      steerComp: 1.35, line: { margin: 0.6, iterations: 1500 } }
+  : motorClass === 'mod'
   ? { speed: { ayMax: 24.6, axBrake: 20.5, axAccel: 18, vTop: 35 }, kp: 1.2,
       line: { margin: 0.24, iterations: 2000 } }
   : { speed: { ayMax: 21, axBrake: 15, axAccel: 12, vTop: 19 }, kp: 1.2,
@@ -27,7 +31,11 @@ const track = buildTrack(trackName);
 const car = new Car(PARAMS);
 const world = new World(track, car);
 const driver = new Driver(track, car, driverOpts);
-car.surfaceFn = makeSurface(track, driver.line);
+const surfOpts = motorClass === 'buggy'
+  ? { gripNoiseAmp: 0.08, grooveBonus: 0.08, dustPenalty: 0.09,
+      roughFine: 0.003, roughCoarse: 0.006 }
+  : {};
+car.surfaceFn = makeSurface(track, driver.line, surfOpts);
 world.placeAtStart(1.0);
 console.log(`Car: ${PARAMS.name}`);
 console.log(`Ideal lap (quasi-steady-state optimum): ${driver.idealLap.toFixed(3)} s`);
@@ -35,7 +43,7 @@ console.log(`Ideal lap (quasi-steady-state optimum): ${driver.idealLap.toFixed(3
 const FPS = 60;
 const frames = [];
 let t = 0;
-const tMax = 120;
+const tMax = 170;
 
 while (world.lap < lapsWanted + 1 && t < tMax) {
   world.step(1 / FPS, () => driver.update());
@@ -52,6 +60,8 @@ while (world.lap < lapsWanted + 1 && t < tMax) {
     shock: car.tel.shock.map(s => +s.toFixed(2)),
     tT: car.tireT.map(t => +t.toFixed(1)),
     slip: +Math.max(...car.tel.sat).toFixed(2),
+    z: +((car.tel.groundZ || 0) + car.zH).toFixed(3),
+    gz: +(car.tel.groundZ || 0).toFixed(3),
     rpm: Math.round(car.omegaDrive * PARAMS.gearRatio * 60 / (2 * Math.PI)),
     ay: +car.ayF.toFixed(2), ax: +car.axF.toFixed(2),
     wspd: +(car.omegaDrive * car.p.wheelRadius).toFixed(2)
@@ -87,6 +97,7 @@ writeFileSync(outFile, JSON.stringify({
   racingLine,
   car: {
     halfLength: PARAMS.halfLength, halfWidth: PARAMS.halfWidth,
+    bodyLift: PARAMS.wheelRadius > 0.04 ? 0.028 : 0,
     wheelRadius: PARAMS.wheelRadius, wheelbase: PARAMS.wheelbase,
     a: PARAMS.a, track: PARAMS.track
   },

@@ -96,8 +96,51 @@ export function buildFigure8() {
 
 export function buildTrack(name) {
   if (name === 'figure8') return buildFigure8();
+  if (name === 'dirt') return buildDirt();
   if (name === 'luxembourg') return buildLuxembourg();
   return buildOval();
+}
+
+export function buildDirt() {
+  // 1/8-scale offroad track: the proven Luxembourg loop scaled x1.55
+  // (327 m, 5.2 m dirt lanes) with a double jump on the main straight,
+  // a tabletop on the top straight and a whoops section on the return.
+  const k = 1.55;
+  const pts = buildPath([
+    ['S', 40 * k],
+    ['L', 7 * k, 180],
+    ['S', 6 * k],
+    ['R', 4 * k, 90],
+    ['S', 4 * k],
+    ['L', 3 * k, 90],
+    ['S', 9 * k],
+    ['L', 3 * k, 90],
+    ['S', 3 * k],
+    ['R', 3 * k, 90],
+    ['S', 4 * k],
+    ['R', 3 * k, 90],
+    ['S', 2 * k],
+    ['L', 3.2 * k, 180],
+    ['S', 8.8 * k],
+    ['L', 3.2 * k, 90],
+    ['S', 28 * k],
+    ['R', 2.5 * k, 180],
+    ['S', 29.8 * k],
+    ['L', 2.0 * k, 180]
+  ]);
+  const t = finalize('dirt', pts, 5.2, { x: 31, y: -10, z: 3.2 }, [12, 0]);
+  t.features = [
+    // double jump on the main straight (takeoff, gap, landing ramp)
+    { s0: 20, s1: 23, s2: 23.6, s3: 25.5, h: 0.55 },
+    { s0: 31, s1: 32.6, s2: 33.2, s3: 38, h: 0.4 },
+    // small kicker on the upper straight
+    { s0: 130, s1: 132, s2: 132.6, s3: 135.5, h: 0.25 },
+    // tabletop on the long return straight
+    { s0: 224, s1: 227, s2: 233, s3: 237.5, h: 0.5 },
+    // whoops on the lower return lane
+    { type: 'whoops', s0: 285, s1: 303, amp: 0.11, wl: 3.0 }
+  ];
+  return t;
 }
 
 /** Turtle-style path builder: segments are ['S', len] or ['L'|'R', radius, degrees]. */
@@ -218,6 +261,47 @@ export function trackGeometry(track) {
         pts: [[a[0], a[1], 0], [b[0], b[1], 0], [b[0], b[1], bh], [a[0], a[1], bh]],
         color: col, kind: 'wall'
       });
+    }
+  }
+  // jump faces: dirt-colored 3D surfaces over the flat ground plane
+  if (track.features) {
+    const sAt = si => {
+      let i = 0;
+      while (i < n - 1 && track.s[i + 1] < si) i++;
+      return i;
+    };
+    const strip = (sA, sB, hA, hB) => {
+      const i0 = sAt(sA), i1 = sAt(sB);
+      const step = Math.max(2, Math.floor((i1 - i0) / 6));
+      for (let i = i0; i < i1; i += step) {
+        const j = Math.min(i + step, i1);
+        const fA = hA + (hB - hA) * (track.s[i] - sA) / Math.max(sB - sA, 0.01);
+        const fB = hA + (hB - hA) * (track.s[j] - sA) / Math.max(sB - sA, 0.01);
+        const a = edge(i, hw), b = edge(j, hw), c2 = edge(j, -hw), d2 = edge(i, -hw);
+        polys.push({
+          pts: [[a[0], a[1], fA], [b[0], b[1], fB], [c2[0], c2[1], fB], [d2[0], d2[1], fA]],
+          color: [151, 118, 80], kind: 'wall'
+        });
+        // side skirts
+        for (const [pA, pB] of [[a, b], [d2, c2]]) {
+          polys.push({
+            pts: [[pA[0], pA[1], 0], [pB[0], pB[1], 0], [pB[0], pB[1], fB], [pA[0], pA[1], fA]],
+            color: [128, 98, 66], kind: 'wall'
+          });
+        }
+      }
+    };
+    for (const f of track.features) {
+      if (f.type === 'whoops') {
+        for (let sw = f.s0; sw < f.s1; sw += f.wl) {
+          strip(sw, sw + f.wl / 2, 0, f.amp);
+          strip(sw + f.wl / 2, sw + f.wl, f.amp, 0);
+        }
+      } else {
+        strip(f.s0, f.s1, 0, f.h);
+        if (f.s2 > f.s1) strip(f.s1, f.s2, f.h, f.h);
+        strip(f.s2, f.s3, f.h, 0);
+      }
     }
   }
   // extra decorations (e.g. divider rails between parallel lanes)
