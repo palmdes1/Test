@@ -36,6 +36,24 @@ npm run serve          # python3 -m http.server 8000
 | M | motor: 13.5T stock ↔ 5.5T mod |
 | 1 / 2 / 3 | oval / figure-8 / luxembourg |
 
+## Offroad showcase — Red Clay Ridge
+
+`offroad/` is a standalone Three.js 3D visual of a world-class 1/8-scale
+offroad clay track: a 385 m lap with a big triple, double-double rhythm
+section, tabletop, step-up ridge into a sky-drop, whoops, six banked berms
+and an elevated bowl sweeper — plus drivers' stand, pit canopies, sponsor
+boards, fencing, and two AI buggies lapping it with ballistic airtime.
+The terrain is a procedural heightfield: jumps, berms and elevation are
+stamped along a Catmull-Rom centerline and blended into noise ground.
+
+```bash
+npm run serve          # then open http://localhost:8000/offroad/
+```
+
+Cameras: **orbit** (drag/scroll), **chase**, **drivers' stand** (auto-zoom,
+like the rostrum cam in the sim) and **onboard** — press **C** to cycle.
+Three.js is vendored in `offroad/vendor/`, so no network access is needed.
+
 ## Headless tools
 
 ```bash
