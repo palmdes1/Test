@@ -72,6 +72,7 @@ tools/    validation, headless lap runner, MP4 renderer
 |---|---|---|---|---|
 | Oval 75.4 m | 13.5T | 5.30 s | 5.61 s | 0.31 s |
 | Luxembourg 210.9 m | 5.5T mod | 14.77 s | 15.10 s | 0.33 s |
+| Dirt 327 m (jumps) | 1/8 nitro buggy | 34.78 s | 37.98 s | 3.2 s |
 
 Luxembourg: 91 km/h on the straight, ~2.2 g in the carousel, lap times build
 16.65 → 16.06 s as tire temps climb from 34 °C into the upper 40s. The speed
@@ -80,6 +81,14 @@ throttle). `tools/telemetry_sheet.py` renders an engineering sheet
 (speed/pedals, steering/yaw rate, roll/pitch, shock travel, tire temps, g-g
 diagram); `tools/make_audio.py` synthesizes motor whine + tire scrub from
 telemetry and muxes it into the video.
+
+## Offroad (key 4)
+
+1/8 nitro buggy on a 327 m dirt track: double jump, kicker, tabletop and
+whoops. The .21 two-stroke has a torque curve, centrifugal clutch and disc
+brake; off a ramp the chassis flies ballistically and the drivetrain's gyro
+reaction gives real mid-air attitude control - brake drops the nose,
+throttle lifts it. A track marshal puts you back on line if you get stuck.
 
 ## RC radio (VRC USB adapter)
 
